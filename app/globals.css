@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme inline {
+  --color-background: var(--background);
+    --color-foreground: var(--foreground);
+      --color-card: var(--card);
+        --color-card-foreground: var(--card-foreground);
+          --color-popover: var(--popover);
+            --color-popover-foreground: var(--popover-foreground);
+              --color-primary: var(--primary);
+                --color-primary-foreground: var(--primary-foreground);
+                  --color-secondary: var(--secondary);
+                    --color-secondary-foreground: var(--secondary-foreground);
+                      --color-muted: var(--muted);
+                        --color-muted-foreground: var(--muted-foreground);
+                          --color-accent: var(--accent);
+                            --color-accent-foreground: var(--accent-foreground);
+                              --color-destructive: var(--destructive);
+                                --color-border: var(--border);
+                                  --color-input: var(--input);
+                                    --color-ring: var(--ring);
+                                      --radius-sm: calc(var(--radius) - 4px);
+                                        --radius-md: calc(var(--radius) - 2px);
+                                          --radius-lg: var(--radius);
+                                            --radius-xl: calc(var(--radius) + 4px);
+                                            }
+
+                                            :root {
+                                              --radius: 0.75rem;
+                                                --background: #0b0b14;
+                                                  --foreground: #e8e8f2;
+                                                    --card: #12121f;
+                                                      --card-foreground: #e8e8f2;
+                                                        --popover: #12121f;
+                                                          --popover-foreground: #e8e8f2;
+                                                            --primary: #7c3aed;
+                                                              --primary-foreground: #ffffff;
+                                                                --secondary: #1e1b4b;
+                                                                  --secondary-foreground: #e8e8f2;
+                                                                    --muted: #1a1a2e;
+                                                                      --muted-foreground: #9494b0;
+                                                                        --accent: #3b4cf0;
+                                                                          --accent-foreground: #ffffff;
+                                                                            --destructive: #ef4444;
+                                                                              --border: #26263d;
+                                                                                --input: #26263d;
+                                                                                  --ring: #6d5bf5;
+                                                                                  }
+
+                                                                                  @layer base {
+                                                                                    * {
+                                                                                        @apply border-border outline-ring/50;
+                                                                                          }
+                                                                                            body {
+                                                                                                @apply bg-background text-foreground;
+                                                                                                  }
+                                                                                                  }
