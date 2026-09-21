@@ -13,9 +13,9 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateRes
 
   // Изредка чистим просроченные записи
   if (buckets.size > 5000) {
-    for (const [k, b] of buckets) {
+    buckets.forEach((b, k) => {
       if (b.resetAt <= now) buckets.delete(k);
-    }
+    });
   }
 
   const b = buckets.get(key);
