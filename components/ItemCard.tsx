@@ -7,11 +7,16 @@ export type ItemData = {
   statTrak: boolean;
 };
 
+type RarityStyle = {
+  label: string;
+  text: string;
+  border: string;
+  bg: string;
+  bar: string;
+};
+
 // Цвета редкости (классы записаны целиком, чтобы Tailwind их увидел)
-export const RARITY: Record
-  string,
-  { label: string; text: string; border: string; bg: string; bar: string }
-> = {
+export const RARITY: Record<string, RarityStyle> = {
   COMMON: {
     label: "Обычный",
     text: "text-zinc-300",
@@ -56,7 +61,7 @@ export const RARITY: Record
   },
 };
 
-export function rarityOf(rarity: string) {
+export function rarityOf(rarity: string): RarityStyle {
   return RARITY[rarity] ?? RARITY.COMMON;
 }
 
@@ -68,18 +73,17 @@ const WEAR_SHORT: Record<string, string> = {
   "Battle-Scarred": "BS",
 };
 
-export default function ItemCard({
-  item,
-  compact = false,
-}: {
+type ItemCardProps = {
   item: ItemData;
   compact?: boolean;
-}) {
+};
+
+export default function ItemCard({ item, compact = false }: ItemCardProps) {
   const r = rarityOf(item.rarity);
-  const [weapon, skin] = item.name.includes(" | ")
-    ? item.name.split(" | ")
-    : [item.name, ""];
-  const wear = item.wear ? WEAR_SHORT[item.wear] ?? item.wear : "";
+  const parts = item.name.split(" | ");
+  const weapon = parts[0];
+  const skin = parts[1] ?? "";
+  const wear = item.wear ? (WEAR_SHORT[item.wear] ?? item.wear) : "";
 
   return (
     <div
