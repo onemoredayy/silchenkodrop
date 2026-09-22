@@ -7,51 +7,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// role: "USER" | "ADMIN"
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Rarity {
+  COMMON
+  UNCOMMON
+  RARE
+  MYTHICAL
+  LEGENDARY
+  ANCIENT
+}
+
 model User {
   id        String   @id @default(cuid())
   steamId   String   @unique
   username  String
   avatar    String?
   balance   Float    @default(0)
-  role      String   @default("USER")
+  role      Role     @default(USER)
   isBanned  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  openings     Opening[]
-  inventory    InventoryItem[]
+  openings   Opening[]
+  inventory  InventoryItem[]
   transactions Transaction[]
 }
 
 model Case {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
-  slug        String  @unique
+  slug        String   @unique
   price       Float
-  image       String  @default("")
-  description String  @default("")
-  isActive    Boolean @default(true)
+  image       String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
   items    CaseItem[]
   openings Opening[]
 }
 
-// rarity: "COMMON" | "UNCOMMON" | "RARE" | "MYTHICAL" | "LEGENDARY" | "ANCIENT"
 model Item {
-  id       String  @id @default(cuid())
-  name     String
-  rarity   String
-  price    Float
-  image    String  @default("")
-  wear     String?
-  statTrak Boolean @default(false)
+  id             String   @id @default(cuid())
+  name           String
+  rarity         Rarity
+  price          Float
+  image          String?
+  wear           String?
+  statTrak       Boolean  @default(false)
+  marketHashName String?  @unique
 
-  caseItems CaseItem[]
-  openings  Opening[]
-  inventory InventoryItem[]
+  cases      CaseItem[]
+  openings   Opening[]
+  inventory  InventoryItem[]
 }
 
 model CaseItem {
+  id         String @id @default(cuid())
   caseId     String
   itemId     String
   dropChance Float
@@ -59,7 +74,7 @@ model CaseItem {
   case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  @@id([caseId, itemId])
+  @@unique([caseId, itemId])
 }
 
 model Opening {
@@ -70,28 +85,23 @@ model Opening {
   pricePaid Float
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
   case Case @relation(fields: [caseId], references: [id])
   item Item @relation(fields: [itemId], references: [id])
-
-  @@index([userId, createdAt])
 }
 
 model InventoryItem {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   itemId     String
-  acquiredAt DateTime @default(now())
-  isSold     Boolean  @default(false)
+  acquiredAt DateTime  @default(now())
+  isSold     Boolean   @default(false)
   soldPrice  Float?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
   item Item @relation(fields: [itemId], references: [id])
-
-  @@index([userId, isSold])
 }
 
-// type: "DEPOSIT" | "OPEN_CASE" | "SELL_ITEM" | "ADMIN_GRANT"
 model Transaction {
   id        String   @id @default(cuid())
   userId    String
@@ -100,12 +110,26 @@ model Transaction {
   meta      String?
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
+  user User @relation(fields: [userId], references: [id])
 }
 
 model SiteSetting {
   key   String @id
   value String
+}
+
+model SkinCatalog {
+  id              String    @id @default(cuid())
+  marketHashName  String    @unique
+  name            String
+  weapon          String?
+  rarity          String?
+  wear            String?
+  statTrak        Boolean   @default(false)
+  image           String?
+  price           Float?
+  lastPriceUpdate DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([lastPriceUpdate])
 }
