@@ -23,7 +23,6 @@ function sleep(ms: number) {
 
 function parsePrice(raw?: string): number | null {
   if (!raw) return null
-  // формат может быть "12,34 pуб." или "$1.23" — вытаскиваем число
   const cleaned = raw.replace(/[^\d.,]/g, "").replace(",", ".")
   const num = parseFloat(cleaned)
   return isNaN(num) ? null : num
@@ -35,12 +34,22 @@ async function fetchPrice(marketHashName: string): Promise<number | null> {
   )}`
 
   try {
-    const res = await fetch(url)
-    if (!res.ok) {
-      console.log(`  HTTP ${res.status} для "${marketHashName}"`)
-      return null
-    }
-    const data: PriceOverviewResponse = await res.json()
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "application/json",
+      },
+    })
+
+    const text = await res.text()
+    console.log(
+      `  [debug] HTTP ${res.status} для "${marketHashName}": ${text.slice(0, 150)}`
+    )
+
+    if (!res.ok) return null
+
+    const data: PriceOverviewResponse = JSON.parse(text)
     if (!data.success) return null
     return parsePrice(data.lowest_price) ?? parsePrice(data.median_price)
   } catch (err) {
@@ -53,9 +62,7 @@ async function main() {
   console.log("Ищу следующую пачку скинов для обновления цен...")
 
   const batch = await prisma.skinCatalog.findMany({
-    orderBy: [
-      { lastPriceUpdate: { sort: "asc", nulls: "first" } },
-    ],
+    orderBy: [{ lastPriceUpdate: { sort: "asc", nulls: "first" } }],
     take: BATCH_SIZE,
   })
 
@@ -75,8 +82,6 @@ async function main() {
       updated++
       console.log(`  ✓ ${skin.marketHashName}: ${price}`)
     } else {
-      // Даже если цена не найдена, отмечаем как проверенное,
-      // чтобы не застревать на одном и том же скине бесконечно
       await prisma.skinCatalog.update({
         where: { id: skin.id },
         data: { lastPriceUpdate: new Date() },
