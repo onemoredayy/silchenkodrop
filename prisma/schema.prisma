@@ -7,32 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
-enum Rarity {
-  COMMON
-  UNCOMMON
-  RARE
-  MYTHICAL
-  LEGENDARY
-  ANCIENT
-}
-
 model User {
   id        String   @id @default(cuid())
   steamId   String   @unique
   username  String
   avatar    String?
   balance   Float    @default(0)
-  role      Role     @default(USER)
+  role      String   @default("USER")
   isBanned  Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  openings   Opening[]
-  inventory  InventoryItem[]
+  openings     Opening[]
+  inventory    InventoryItem[]
   transactions Transaction[]
 }
 
@@ -45,92 +31,3 @@ model Case {
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
-
-  items    CaseItem[]
-  openings Opening[]
-}
-
-model Item {
-  id             String   @id @default(cuid())
-  name           String
-  rarity         Rarity
-  price          Float
-  image          String?
-  wear           String?
-  statTrak       Boolean  @default(false)
-  marketHashName String?  @unique
-
-  cases      CaseItem[]
-  openings   Opening[]
-  inventory  InventoryItem[]
-}
-
-model CaseItem {
-  id         String @id @default(cuid())
-  caseId     String
-  itemId     String
-  dropChance Float
-
-  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
-
-  @@unique([caseId, itemId])
-}
-
-model Opening {
-  id        String   @id @default(cuid())
-  userId    String
-  caseId    String
-  itemId    String
-  pricePaid Float
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-  case Case @relation(fields: [caseId], references: [id])
-  item Item @relation(fields: [itemId], references: [id])
-}
-
-model InventoryItem {
-  id         String    @id @default(cuid())
-  userId     String
-  itemId     String
-  acquiredAt DateTime  @default(now())
-  isSold     Boolean   @default(false)
-  soldPrice  Float?
-
-  user User @relation(fields: [userId], references: [id])
-  item Item @relation(fields: [itemId], references: [id])
-}
-
-model Transaction {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String
-  amount    Float
-  meta      String?
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-}
-
-model SiteSetting {
-  key   String @id
-  value String
-}
-
-model SkinCatalog {
-  id              String    @id @default(cuid())
-  marketHashName  String    @unique
-  name            String
-  weapon          String?
-  rarity          String?
-  wear            String?
-  statTrak        Boolean   @default(false)
-  image           String?
-  price           Float?
-  lastPriceUpdate DateTime?
-  createdAt       DateTime  @default(now())
-
-  @@index([lastPriceUpdate])
-}
-
