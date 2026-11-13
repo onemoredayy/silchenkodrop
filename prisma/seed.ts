@@ -1,7 +1,9 @@
 // Наполнение базы: каталог скинов, 5 кейсов, админ.
 // Запуск: npm run setup   (или повторно: npx tsx prisma/seed.ts)
 import { PrismaClient } from "@prisma/client";
-import { importCatalog } from "../lib/catalog";
+import { findDefault, importCatalog } from "../lib/catalog";
+import { updateAllPrices } from "../lib/prices";
+import { importOfficialCases } from "../lib/official-cases";
 import { DEFAULT_SETTINGS } from "../lib/settings";
 
 const prisma = new PrismaClient();
@@ -19,7 +21,17 @@ const WEIGHT: Record<string, number> = {
   ANCIENT: 1,
 };
 
+// Блоки на главной. Первые четыре — с кейсами-пустышками, отредактируй их в админке.
+const SECTIONS = [
+  { slug: "silchenko", name: "СИЛЬЧЕНКО" },
+  { slug: "author", name: "Авторский понос" },
+  { slug: "rare", name: "Редкости" },
+  { slug: "operation", name: "Операция «Дать на клык»" },
+  { slug: "official", name: "Обычные кейсы" },
+];
+
 const CASES: {
+  section: string;
   name: string;
   slug: string;
   price: number;
@@ -29,6 +41,7 @@ const CASES: {
   {
     name: "Первый шаг",
     slug: "first-step",
+    section: "operation",
     price: 49,
     description: "Дешёвый вход. В основном ширпотреб, но шанс есть.",
     items: [
@@ -49,6 +62,7 @@ const CASES: {
   {
     name: "Калашников",
     slug: "kalashnikov",
+    section: "silchenko",
     price: 299,
     description: "Только AK-47. От пыли до Fire Serpent.",
     items: [
@@ -69,6 +83,7 @@ const CASES: {
   {
     name: "Снайпер",
     slug: "sniper",
+    section: "rare",
     price: 499,
     description: "AWP и SSG 08. Медленно, но метко.",
     items: [
@@ -89,6 +104,7 @@ const CASES: {
   {
     name: "Пистолетный раунд",
     slug: "pistol-round",
+    section: "author",
     price: 149,
     description: "Глоки, юспы, диглы. Первый раунд решает.",
     items: [
@@ -108,6 +124,7 @@ const CASES: {
   {
     name: "Ва-банк",
     slug: "all-in",
+    section: "silchenko",
     price: 1499,
     description: "Дорогой кейс для тех, кому не жалко.",
     items: [
@@ -135,40 +152,36 @@ function chances(items: Seed[]) {
 }
 
 async function main() {
-  // 1. Каталог (нужен для картинок и рыночных цен). Без интернета — пропускаем.
-  const catalogCount = await prisma.skinCatalog.count();
-  if (catalogCount === 0) {
-    try {
-      await importCatalog(prisma);
-    } catch (e) {
-      console.warn("! Каталог не загрузился, кейсы будут без картинок:", (e as Error).message);
-    }
-  }
-
-  // 2. Настройки
+  // 1. Настройки
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     await prisma.siteSetting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
 
-  // 3. Админ (подставь свой SteamID64 в .env → ADMIN_STEAM_IDS)
-  await prisma.user.upsert({
-    where: { steamId: "76561198000000000" },
-    update: { role: "ADMIN" },
-    create: {
-      steamId: "76561198000000000",
-      username: "Админ",
-      balance: 999999,
-      role: "ADMIN",
-    },
-  });
+  // 2. Каталог всех скинов и цены Steam (нужен интернет)
+  try {
+    await importCatalog(prisma);
+    await updateAllPrices(prisma);
+  } catch (e) {
+    console.warn("! Каталог или цены не загрузились:", (e as Error).message);
+  }
 
-  // 4. Предметы и кейсы
+  // 3. Блоки
+  const sectionIds: Record<string, string> = {};
+  for (const [i, sec] of SECTIONS.entries()) {
+    const row = await prisma.caseSection.upsert({
+      where: { slug: sec.slug },
+      update: {},
+      create: { ...sec, sortOrder: i },
+    });
+    sectionIds[sec.slug] = row.id;
+  }
+
+  // 4. Кейсы-пустышки для своих блоков
   const itemIds = new Map<string, string>();
-  for (const c of CASES) {
+  for (const [ci, c] of CASES.entries()) {
     for (const [name, rarity, price] of c.items) {
       if (itemIds.has(name)) continue;
-      const cat = await prisma.skinCatalog.findFirst({ where: { name } });
-      const existing = await prisma.item.findFirst({ where: { name } });
+      const cat = await findDefault(prisma, name);
       const data = {
         name,
         rarity: cat?.rarity ?? rarity,
@@ -177,25 +190,29 @@ async function main() {
         wear: cat?.wear ?? "Field-Tested",
         marketHashName: cat?.marketHashName ?? null,
       };
+      const existing = await prisma.item.findFirst({
+        where: cat ? { marketHashName: cat.marketHashName } : { name },
+      });
       const item = existing
         ? await prisma.item.update({ where: { id: existing.id }, data })
         : await prisma.item.create({ data });
       itemIds.set(name, item.id);
     }
-
-    const ch = chances(c.items);
+    const lastItem = await prisma.item.findUnique({ where: { id: itemIds.get(c.items[c.items.length - 1][0])! } });
     const kase = await prisma.case.upsert({
       where: { slug: c.slug },
-      update: {},
+      update: { sectionId: sectionIds[c.section] },
       create: {
         name: c.name,
         slug: c.slug,
         price: c.price,
         description: c.description,
-        sortOrder: CASES.indexOf(c),
-        image: (await prisma.item.findUnique({ where: { id: itemIds.get(c.items[c.items.length - 1][0])! } }))?.image ?? null,
+        sortOrder: ci,
+        image: lastItem?.image ?? null,
+        sectionId: sectionIds[c.section],
       },
     });
+    const ch = chances(c.items);
     for (let i = 0; i < c.items.length; i++) {
       const itemId = itemIds.get(c.items[i][0])!;
       await prisma.caseItem.upsert({
@@ -204,8 +221,22 @@ async function main() {
         create: { caseId: kase.id, itemId, dropChance: ch[i] },
       });
     }
-    console.log(`Кейс «${c.name}»: ${c.items.length} предметов`);
   }
+  console.log(`Свои кейсы: ${CASES.length}`);
+
+  // 5. Все обычные кейсы из игры
+  try {
+    await importOfficialCases(prisma, sectionIds.official);
+  } catch (e) {
+    console.warn("! Обычные кейсы не загрузились:", (e as Error).message);
+  }
+
+  // 6. Тестовый админ (настоящим админом станет первый, кто войдёт через Steam)
+  await prisma.user.upsert({
+    where: { steamId: "76561198000000000" },
+    update: {},
+    create: { steamId: "76561198000000000", username: "Тестовый админ", balance: 999999, role: "ADMIN" },
+  });
   console.log("Готово.");
 }
 

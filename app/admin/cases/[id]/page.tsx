@@ -21,9 +21,14 @@ export default async function EditCase({ params, searchParams }: { params: { id:
       });
   if (!isNew && !kase) notFound();
 
-  const [{ margin }, allItems] = await Promise.all([
+  const [{ margin }, sections, allItems] = await Promise.all([
     getSettings(),
-    prisma.item.findMany({ orderBy: { name: "asc" }, include: { catalog: true } }),
+    prisma.caseSection.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.skinCatalog.findMany({
+      where: { isDefault: true },
+      select: { baseName: true, price: true },
+      orderBy: { baseName: "asc" },
+    }),
   ]);
 
   const rows = (kase?.items ?? []).sort(
@@ -31,7 +36,7 @@ export default async function EditCase({ params, searchParams }: { params: { id:
   );
   const { ev, suggested } = suggestedCasePrice(rows, margin);
   const sum = Math.round(rows.reduce((s, r) => s + r.dropChance, 0) * 100) / 100;
-  const inCase = new Set(rows.map((r) => r.itemId));
+  const inCaseNames = new Set(rows.map((r) => r.item.name));
 
   return (
     <div className="space-y-8">
@@ -58,10 +63,19 @@ export default async function EditCase({ params, searchParams }: { params: { id:
           )}
         </label>
         <label className="space-y-1">
-          <span className="text-sm text-dust">Порядок на главной</span>
+          <span className="text-sm text-dust">Блок на главной</span>
+          <select name="sectionId" defaultValue={kase?.sectionId ?? ""} className="input">
+            <option value="">Без блока («Другие кейсы»)</option>
+            {sections.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="text-sm text-dust">Порядок внутри блока</span>
           <input name="sortOrder" type="number" defaultValue={kase?.sortOrder ?? 0} className="input" />
         </label>
-        <label className="space-y-1 sm:col-span-2">
+        <label className="space-y-1">
           <span className="text-sm text-dust">Картинка (ссылка; пусто — покажется название)</span>
           <input name="image" defaultValue={kase?.image ?? ""} className="input" />
         </label>
@@ -115,16 +129,16 @@ export default async function EditCase({ params, searchParams }: { params: { id:
                 ))}
                 <tr>
                   <td colSpan={2}>
-                    <select name="addItemId" defaultValue="" className="input h-8">
-                      <option value="">Добавить предмет…</option>
+                    <input name="addName" list="skins" placeholder="Добавить скин: начни вводить название" className="input h-8" />
+                    <datalist id="skins">
                       {allItems
-                        .filter((i) => !inCase.has(i.id))
+                        .filter((i) => !inCaseNames.has(i.baseName))
                         .map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {i.name} — {money(itemPrice(i))}
+                          <option key={i.baseName} value={i.baseName}>
+                            {money(i.price)}
                           </option>
                         ))}
-                    </select>
+                    </datalist>
                   </td>
                   <td>
                     <input name="addChance" type="number" step="0.0001" min="0" placeholder="шанс" className="input h-8" />

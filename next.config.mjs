@@ -6,9 +6,10 @@ const extraOrigins = (process.env.ALLOWED_ORIGINS || "")
 
 const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
-  experimental: extraOrigins.length
-    ? { serverActions: { allowedOrigins: extraOrigins } }
-    : {},
+  experimental: {
+    instrumentationHook: true, // автообновление цен (instrumentation.ts)
+    ...(extraOrigins.length ? { serverActions: { allowedOrigins: extraOrigins } } : {}),
+  },
 };
 
 export default nextConfig;

@@ -5,6 +5,8 @@ import { pickWeighted } from "@/lib/rng";
 import { itemPrice } from "@/lib/pricing";
 import { rateLimit } from "@/lib/ratelimit";
 import { round2 } from "@/lib/format";
+import { getSettings } from "@/lib/settings";
+import { randomInt } from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (!rateLimit(`open:${user.id}`, 1, 2000) || !rateLimit(`open-m:${user.id}`, 20, 60_000)) {
     return NextResponse.json({ error: "Слишком часто. Подожди пару секунд" }, { status: 429 });
   }
+
+  const { trollChance } = await getSettings();
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -62,7 +66,25 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       });
       const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id }, select: { balance: true } });
 
+      // «Пук-прокрутка»: только визуал. Предмет уже выбран выше честным RNG,
+      // лента лишь сначала притормозит на самом дорогом предмете кейса.
+      const top = rows.reduce((a, b) => (itemPrice(b.item) > itemPrice(a.item) ? b : a));
+      const troll =
+        top.itemId !== win.itemId &&
+        itemPrice(top.item) > price * 2 &&
+        randomInt(0, 10_000) < Math.round(trollChance * 100)
+          ? {
+              id: top.item.id,
+              name: top.item.name,
+              rarity: top.item.rarity,
+              image: top.item.image,
+              wear: top.item.wear,
+              price: round2(itemPrice(top.item)),
+            }
+          : null;
+
       return {
+        troll,
         inventoryId: inv.id,
         balance: fresh.balance,
         item: {

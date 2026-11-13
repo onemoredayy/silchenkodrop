@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ago, money } from "@/lib/format";
+import Notice from "@/components/Notice";
+import { updatePricesNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminHome() {
+export default async function AdminHome({ searchParams }: { searchParams: { msg?: string; error?: string } }) {
   const dayAgo = new Date(Date.now() - 24 * 3600 * 1000);
   const [users, openings, day, balances, catalog, priced, recent, broken] = await Promise.all([
     prisma.user.count(),
@@ -16,6 +18,7 @@ export default async function AdminHome() {
     prisma.opening.findMany({ orderBy: { createdAt: "desc" }, take: 10, include: { user: true, item: true, case: true } }),
     prisma.case.findMany({ include: { items: true } }),
   ]);
+  const pricesAt = await prisma.siteSetting.findUnique({ where: { key: "pricesUpdatedAt" } });
   const badCases = broken.filter((c) => Math.abs(c.items.reduce((s, r) => s + r.dropChance, 0) - 100) > 0.01);
 
   const profit = (openings._sum.pricePaid ?? 0) - (openings._sum.itemPrice ?? 0);
@@ -34,6 +37,15 @@ export default async function AdminHome() {
   return (
     <div className="space-y-8">
       <h1 className="h1">Сводка</h1>
+      {searchParams.msg && <p className="rounded border border-ok/50 px-3 py-2 text-sm text-ok">{searchParams.msg}</p>}
+      <Notice error={searchParams.error} />
+      <form action={updatePricesNow} className="panel flex flex-wrap items-center gap-3 p-4 text-sm">
+        <span className="flex-1 text-dust">
+          Цены Steam обновляются сами каждые 6 часов.{" "}
+          {pricesAt ? `Последний раз — ${ago(new Date(pricesAt.value))} назад.` : "Ещё ни разу не обновлялись."}
+        </span>
+        <button className="btn-ghost">Обновить цены сейчас</button>
+      </form>
       {badCases.length > 0 && (
         <div className="rounded border border-stencil/50 p-3 text-sm text-stencil">
           Сумма шансов не равна 100% в кейсах:{" "}

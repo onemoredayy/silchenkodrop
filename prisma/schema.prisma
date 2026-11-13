@@ -21,6 +21,16 @@ model User {
   openings     Opening[]
   inventory    InventoryItem[]
   transactions Transaction[]
+  upgrades     Upgrade[]
+}
+
+// Блоки кейсов на главной: «СИЛЬЧЕНКО», «Обычные кейсы» и т.д.
+model CaseSection {
+  id        String @id @default(cuid())
+  name      String
+  slug      String @unique
+  sortOrder Int    @default(0)
+  cases     Case[]
 }
 
 model Case {
@@ -33,6 +43,9 @@ model Case {
   isActive    Boolean    @default(true)
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
+  sectionId   String?
+  section     CaseSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  officialId  String? // id кейса из игры (для «Обычных кейсов»)
   items       CaseItem[]
   openings    Opening[]
 }
@@ -51,6 +64,7 @@ model Item {
   cases          CaseItem[]
   openings       Opening[]
   inventory      InventoryItem[]
+  upgradeTargets Upgrade[]
 }
 
 model CaseItem {
@@ -85,13 +99,28 @@ model InventoryItem {
   itemId     String
   dropPrice  Float
   acquiredAt DateTime  @default(now())
-  isSold     Boolean   @default(false)
+  isSold     Boolean   @default(false) // true — больше не в инвентаре (продан или сгорел в апгрейде)
+  upgraded   Boolean   @default(false) // ушёл в апгрейд
   soldPrice  Float?
   soldAt     DateTime?
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   item       Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([userId, isSold])
+}
+
+model Upgrade {
+  id         String   @id @default(cuid())
+  userId     String
+  fromValue  Float
+  targetId   String
+  targetPrice Float
+  chance     Float // %
+  roll       Float // 0..1, выигрыш если roll < chance/100
+  success    Boolean
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  target     Item     @relation(fields: [targetId], references: [id], onDelete: Cascade)
 }
 
 // type: DEPOSIT | OPEN | SELL | ADMIN
@@ -112,22 +141,27 @@ model SiteSetting {
   value String
 }
 
-// Полный каталог скинов CS2 (из ByMykel/CSGO-API), цены — со Steam Market
+// Каталог: каждая строка — конкретный предмет рынка Steam (качество, StatTrak).
+// Список — ByMykel/CSGO-API, цены — prices.csgotrader.app (Steam, в USD → ₽ по курсу ЦБ).
 model SkinCatalog {
   id              String    @id @default(cuid())
   marketHashName  String    @unique
-  name            String
+  baseName        String    @default("") // «AK-47 | Redline» без качества и StatTrak
+  name            String // отображаемое имя (= baseName)
   weapon          String
+  category        String?
   rarity          String
   rarityColor     String?
   wear            String?
+  statTrak        Boolean   @default(false)
+  isDefault       Boolean   @default(false) // «основной» вариант скина: без ST, самое ходовое качество
   image           String?
   price           Float?
   lastPriceUpdate DateTime?
   createdAt       DateTime  @default(now())
   items           Item[]
 
-  @@index([name])
+  @@index([baseName])
   @@index([weapon])
-  @@index([lastPriceUpdate])
+  @@index([price])
 }

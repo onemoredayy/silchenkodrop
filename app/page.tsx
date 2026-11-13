@@ -7,11 +7,21 @@ import DropTicker from "@/components/DropTicker";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [cases, recent, stats] = await Promise.all([
+  const [sections, loose, recent, stats] = await Promise.all([
+    prisma.caseSection.findMany({
+      orderBy: { sortOrder: "asc" },
+      include: {
+        cases: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
+          include: { items: { include: { item: { select: { rarity: true } } } } },
+        },
+      },
+    }),
     prisma.case.findMany({
-      where: { isActive: true },
+      where: { isActive: true, sectionId: null },
       orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
-      include: { items: { include: { item: true } } },
+      include: { items: { include: { item: { select: { rarity: true } } } } },
     }),
     prisma.opening.findMany({
       orderBy: { createdAt: "desc" },
@@ -20,6 +30,11 @@ export default async function Home() {
     }),
     prisma.opening.aggregate({ _count: true }),
   ]);
+
+  const blocks = [
+    ...sections.filter((s) => s.cases.length > 0),
+    ...(loose.length ? [{ id: "other", slug: "other", name: "Другие кейсы", cases: loose }] : []),
+  ];
 
   const drops = recent.map((o) => ({
     id: o.id,
@@ -47,15 +62,27 @@ export default async function Home() {
           </div>
         </div>
         <DropTicker drops={drops} />
+        {blocks.length > 1 && (
+          <nav className="flex flex-wrap gap-2 text-sm">
+            {blocks.map((b) => (
+              <a key={b.id} href={`#${b.slug}`} className="rounded border border-line px-3 py-1.5 text-dust hover:border-stencil hover:text-bone">
+                {b.name}
+              </a>
+            ))}
+          </nav>
+        )}
       </section>
 
-      <section>
-        <h2 className="h2 mb-4">Кейсы</h2>
-        {cases.length === 0 ? (
-          <div className="panel p-6 text-dust">Кейсов пока нет. Добавь их в админке.</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {cases.map((c) => {
+      {blocks.length === 0 && <div className="panel p-6 text-dust">Кейсов пока нет. Добавь их в админке.</div>}
+
+      {blocks.map((block) => (
+        <section key={block.id} id={block.slug} className="scroll-mt-6">
+          <div className="mb-4 flex items-baseline justify-between gap-3 border-b border-line pb-2">
+            <h2 className="font-display text-2xl">{block.name}</h2>
+            <span className="text-sm text-dust">{block.cases.length}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {block.cases.map((c) => {
               const present = new Set(c.items.map((r) => r.item.rarity));
               return (
                 <CaseCard
@@ -70,8 +97,8 @@ export default async function Home() {
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
+      ))}
     </div>
   );
 }

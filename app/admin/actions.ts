@@ -7,6 +7,8 @@ import { requireAdmin } from "@/lib/auth";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { RARITIES } from "@/lib/rarity";
 import { round2 } from "@/lib/format";
+import { updateAllPrices } from "@/lib/prices";
+import { findDefault } from "@/lib/catalog";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const num = (f: FormData, k: string) => Number(String(f.get(k) ?? "").replace(",", "."));
@@ -49,6 +51,7 @@ export async function saveCase(formData: FormData) {
     description: str(formData, "description") || null,
     isActive: formData.get("isActive") === "on",
     sortOrder: Number(str(formData, "sortOrder")) || 0,
+    sectionId: str(formData, "sectionId") || null,
   };
   const kase = id
     ? await prisma.case.update({ where: { id }, data })
@@ -83,8 +86,28 @@ export async function saveChances(formData: FormData) {
     keep.push({ id: r.id, chance: c });
   }
 
-  const addItemId = str(formData, "addItemId");
+  const addName = str(formData, "addName");
   const addChance = num(formData, "addChance");
+  let addItemId = "";
+  if (addName) {
+    const existing = await prisma.item.findFirst({ where: { name: addName } });
+    if (existing) addItemId = existing.id;
+    else {
+      const cat = await findDefault(prisma, addName);
+      if (!cat) redirect(`${back}?error=${encodeURIComponent(`Скина «${addName}» нет в каталоге`)}`);
+      const item = await prisma.item.create({
+        data: {
+          name: cat.baseName,
+          rarity: cat.rarity,
+          price: cat.price ?? 0,
+          image: cat.image,
+          wear: cat.wear,
+          marketHashName: cat.marketHashName,
+        },
+      });
+      addItemId = item.id;
+    }
+  }
   const adding = !!addItemId;
   if (adding) {
     if (!Number.isFinite(addChance) || addChance < 0) redirect(`${back}?error=${encodeURIComponent("Укажи шанс нового предмета")}`);
@@ -216,15 +239,57 @@ export async function toggleAdmin(formData: FormData) {
 
 // ---------- Настройки ----------
 
+const LIMITS: Record<string, number> = { usdRub: 1000 };
+
 export async function saveSettings(formData: FormData) {
   await requireAdmin();
   for (const key of Object.keys(DEFAULT_SETTINGS)) {
     const v = num(formData, key);
-    if (!Number.isFinite(v) || v < 0 || v > 100) {
-      redirect(`/admin/settings?error=${encodeURIComponent("Значения — от 0 до 100")}`);
+    const max = LIMITS[key] ?? 100;
+    if (!Number.isFinite(v) || v < 0 || v > max) {
+      redirect(`/admin/settings?error=${encodeURIComponent(`Неверное значение: ${key} (от 0 до ${max})`)}`);
     }
     await prisma.siteSetting.upsert({ where: { key }, update: { value: String(v) }, create: { key, value: String(v) } });
   }
   revalidatePath("/", "layout");
   redirect("/admin/settings?ok=1");
+}
+
+export async function updatePricesNow() {
+  await requireAdmin();
+  try {
+    const r = await updateAllPrices(prisma);
+    revalidatePath("/", "layout");
+    redirect(`/admin?msg=${encodeURIComponent(`Цены обновлены: ${r.updated} изменилось, курс $1 = ${r.rate} ₽`)}`);
+  } catch (e) {
+    if ((e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
+    redirect(`/admin?error=${encodeURIComponent(`Не удалось обновить цены: ${(e as Error).message}`)}`);
+  }
+}
+
+// ---------- Блоки ----------
+
+export async function saveSection(formData: FormData) {
+  await requireAdmin();
+  const id = str(formData, "id");
+  const name = str(formData, "name");
+  if (!name) redirect(`/admin/sections?error=${encodeURIComponent("Укажи название блока")}`);
+  const sortOrder = Number(str(formData, "sortOrder")) || 0;
+  if (id) {
+    await prisma.caseSection.update({ where: { id }, data: { name, sortOrder } });
+  } else {
+    const slug = slugify(name) || `block-${Date.now()}`;
+    const clash = await prisma.caseSection.findUnique({ where: { slug } });
+    await prisma.caseSection.create({ data: { name, sortOrder, slug: clash ? `${slug}-${Date.now()}` : slug } });
+  }
+  revalidatePath("/", "layout");
+  redirect("/admin/sections?ok=1");
+}
+
+export async function deleteSection(formData: FormData) {
+  await requireAdmin();
+  // кейсы блока не удаляются — попадут в «Другие кейсы»
+  await prisma.caseSection.delete({ where: { id: str(formData, "id") } });
+  revalidatePath("/", "layout");
+  redirect("/admin/sections?ok=1");
 }

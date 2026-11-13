@@ -6,6 +6,7 @@ export const RARITIES = [
   "MYTHICAL",
   "LEGENDARY",
   "ANCIENT",
+  "GOLD",
 ] as const;
 
 export type Rarity = (typeof RARITIES)[number];
@@ -17,6 +18,7 @@ export const RARITY: Record<string, { label: string; color: string }> = {
   MYTHICAL: { label: "Запрещённое", color: "#8847ff" },
   LEGENDARY: { label: "Засекреченное", color: "#d32ce6" },
   ANCIENT: { label: "Тайное", color: "#eb4b4b" },
+  GOLD: { label: "★ Редкий предмет", color: "#e4ae39" },
 };
 
 export function rarityColor(r: string) {
@@ -28,7 +30,8 @@ export function rarityLabel(r: string) {
 }
 
 // ByMykel rarity.id → наша редкость
-export function mapCatalogRarity(id: string | undefined): Rarity {
+export function mapCatalogRarity(id: string | undefined, name = ""): Rarity {
+  if (name.startsWith("★") || id === "rarity_contraband") return "GOLD";
   switch (id) {
     case "rarity_common_weapon":
     case "rarity_common":

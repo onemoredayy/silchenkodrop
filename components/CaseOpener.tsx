@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { rarityColor, rarityLabel } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import SkinImage from "./SkinImage";
+import { playFart } from "@/lib/fart";
 
 type Item = {
   id: string;
@@ -26,7 +27,7 @@ const WIN_INDEX = 56;
 const SPIN_MS = 6500;
 
 // Лента только для красоты: победитель уже выбран сервером
-function buildStrip(items: Item[], winner: Omit<Item, "chance">) {
+function buildStrip(items: Item[], winner: Omit<Item, "chance">, decoy?: Omit<Item, "chance"> | null) {
   const total = items.reduce((s, i) => s + i.chance, 0) || 1;
   const pick = () => {
     let r = Math.random() * total;
@@ -35,7 +36,14 @@ function buildStrip(items: Item[], winner: Omit<Item, "chance">) {
     }
     return items[0];
   };
-  return Array.from({ length: LENGTH }, (_, i) => (i === WIN_INDEX ? { ...winner, chance: 0 } : pick()));
+  return Array.from({ length: LENGTH }, (_, i) => {
+    // при пук-прокрутке: на WIN_INDEX — топ-предмет, следом — настоящий выигрыш
+    if (decoy) {
+      if (i === WIN_INDEX) return { ...decoy, chance: 0 };
+      if (i === WIN_INDEX + 1) return { ...winner, chance: 0 };
+    } else if (i === WIN_INDEX) return { ...winner, chance: 0 };
+    return pick();
+  });
 }
 
 export default function CaseOpener({
@@ -69,6 +77,9 @@ export default function CaseOpener({
   const [fast, setFast] = useState(false);
   const [sold, setSold] = useState<number | null>(null);
   const [money_, setMoney] = useState(balance);
+  const [sound, setSound] = useState(true);
+  const [duration, setDuration] = useState(SPIN_MS);
+  const [trolled, setTrolled] = useState(false);
 
   const canOpen = loggedIn && !banned && money_ >= price && state !== "spinning" && items.length > 0;
 
@@ -93,25 +104,43 @@ export default function CaseOpener({
       return;
     }
 
-    const next = buildStrip(items, result.item);
+    const decoy = data.troll as Won["item"] | null;
+    const next = buildStrip(items, result.item, decoy);
     setAnimate(false);
     setOffset(0);
     setStrip(next);
     setWon(null);
-    // ждём, пока лента перерисуется в начальной позиции, затем крутим
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const w = viewport.current?.clientWidth ?? 800;
-        const jitter = (Math.random() - 0.5) * CARD * 0.7;
-        setAnimate(true);
-        setOffset(-(WIN_INDEX * STEP + CARD / 2 - w / 2 + jitter));
-      }),
-    );
-    setTimeout(() => {
+    setTrolled(false);
+    const w = viewport.current?.clientWidth ?? 800;
+    const centerOn = (index: number, jitter: number) => -(index * STEP + CARD / 2 - w / 2 + jitter);
+
+    const finish = () => {
       setWon(result);
       setState("done");
       router.refresh();
-    }, SPIN_MS + 150);
+    };
+
+    // ждём, пока лента перерисуется в начальной позиции, затем крутим
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setDuration(SPIN_MS);
+        setAnimate(true);
+        setOffset(centerOn(WIN_INDEX, decoy ? (Math.random() - 0.5) * CARD * 0.3 : (Math.random() - 0.5) * CARD * 0.7));
+      }),
+    );
+
+    if (!decoy) {
+      setTimeout(finish, SPIN_MS + 150);
+      return;
+    }
+    // Пук-прокрутка: замерли на топе… пук… доезжаем до настоящего предмета
+    setTimeout(() => {
+      if (sound) playFart();
+      setTrolled(true);
+      setDuration(1100);
+      setOffset(centerOn(WIN_INDEX + 1, (Math.random() - 0.5) * CARD * 0.4));
+      setTimeout(finish, 1250);
+    }, SPIN_MS + 1200);
   }
 
   async function sell() {
@@ -139,7 +168,9 @@ export default function CaseOpener({
           style={{
             gap: GAP,
             transform: `translateX(${offset}px)`,
-            transition: animate ? `transform ${SPIN_MS}ms cubic-bezier(0.08, 0.6, 0.12, 1)` : "none",
+            transition: animate
+              ? `transform ${duration}ms ${duration === SPIN_MS ? "cubic-bezier(0.08, 0.6, 0.12, 1)" : "cubic-bezier(0.5, 0, 0.3, 1)"}`
+              : "none",
           }}
         >
           {strip.map((it, i) => (
@@ -174,6 +205,7 @@ export default function CaseOpener({
               {rarityLabel(won.item.rarity)}
             </div>
             <div className="font-display text-xl leading-tight">{won.item.name}</div>
+            {trolled && <div className="text-sm text-dust">Почти. Топ уехал.</div>}
             <div className="text-sm text-dust">Цена: {money(won.item.price)}</div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -207,6 +239,10 @@ export default function CaseOpener({
         <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
           <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} className="accent-stencil" />
           Без анимации
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
+          <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} className="accent-stencil" />
+          Звук
         </label>
         {loggedIn && (
           <span className="ml-auto text-sm text-dust">

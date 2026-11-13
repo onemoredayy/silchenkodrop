@@ -66,10 +66,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: { 
               rarity={r.item.rarity}
               image={r.item.image}
               wear={r.item.wear}
-              price={showSold ? r.soldPrice ?? 0 : r.sell}
+              price={showSold ? (r.upgraded ? r.dropPrice : r.soldPrice ?? 0) : r.sell}
               footer={
                 showSold ? (
-                  <span className="text-xs text-dust">Продан</span>
+                  <span className="text-xs text-dust">{r.upgraded ? "Ушёл в апгрейд" : "Продан"}</span>
                 ) : (
                   <SellButton ids={[r.id]} total={r.sell} label="Продать" />
                 )

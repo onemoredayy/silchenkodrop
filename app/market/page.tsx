@@ -3,13 +3,15 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { RARITIES, rarityLabel } from "@/lib/rarity";
 import { ago } from "@/lib/format";
-import ItemCard from "@/components/ItemCard";
+import ItemCard, { wearRu } from "@/components/ItemCard";
+
+const WEARS = ["Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle-Scarred"];
 
 export const dynamic = "force-dynamic";
 
 const PER_PAGE = 40;
 
-type SP = { q?: string; rarity?: string; weapon?: string; sort?: string; page?: string };
+type SP = { q?: string; rarity?: string; weapon?: string; sort?: string; page?: string; wear?: string; st?: string };
 
 export default async function MarketPage({ searchParams }: { searchParams: SP }) {
   const q = (searchParams.q ?? "").trim();
@@ -20,6 +22,8 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
     ...(q ? { name: { contains: q } } : {}),
     ...(searchParams.rarity ? { rarity: searchParams.rarity } : {}),
     ...(searchParams.weapon ? { weapon: searchParams.weapon } : {}),
+    ...(searchParams.wear ? { wear: searchParams.wear } : {}),
+    ...(searchParams.st === "1" ? { statTrak: true } : searchParams.st === "0" ? { statTrak: false } : {}),
   };
   const orderBy: Prisma.SkinCatalogOrderByWithRelationInput =
     sort === "price_asc"
@@ -49,13 +53,13 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
         <div>
           <h1 className="h1">Каталог скинов</h1>
           <p className="mt-2 text-sm text-dust">
-            {total.toLocaleString("ru-RU")} скинов. Цены со Steam Market
+            {total.toLocaleString("ru-RU")} предметов. Цены Steam Market обновляются автоматически
             {lastUpdate?.lastPriceUpdate ? `, последнее обновление ${ago(lastUpdate.lastPriceUpdate)} назад` : ", ещё не обновлялись"}.
           </p>
         </div>
       </div>
 
-      <form className="grid gap-2 sm:grid-cols-[1fr_180px_180px_160px_auto]">
+      <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_160px_160px_160px_130px_150px_auto]">
         <input name="q" defaultValue={q} placeholder="Поиск: Redline, AWP…" className="input" />
         <select name="weapon" defaultValue={searchParams.weapon ?? ""} className="input">
           <option value="">Любое оружие</option>
@@ -72,6 +76,19 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
               {rarityLabel(r)}
             </option>
           ))}
+        </select>
+        <select name="wear" defaultValue={searchParams.wear ?? ""} className="input">
+          <option value="">Любое качество</option>
+          {WEARS.map((w) => (
+            <option key={w} value={w}>
+              {wearRu(w)}
+            </option>
+          ))}
+        </select>
+        <select name="st" defaultValue={searchParams.st ?? ""} className="input">
+          <option value="">ST и обычные</option>
+          <option value="0">Без StatTrak</option>
+          <option value="1">Только StatTrak</option>
         </select>
         <select name="sort" defaultValue={sort} className="input">
           <option value="price_desc">Сначала дорогие</option>
@@ -92,7 +109,7 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
           {rows.map((r) => (
             <ItemCard
               key={r.id}
-              name={r.name}
+              name={r.statTrak ? r.name.replace(/^(★ )?/, "$1StatTrak™ ") : r.name}
               rarity={r.rarity}
               image={r.image}
               wear={r.wear}

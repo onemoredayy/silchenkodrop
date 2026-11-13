@@ -5,6 +5,7 @@ import Avatar from "./Avatar";
 
 const links = [
   { href: "/", label: "Кейсы" },
+  { href: "/upgrade", label: "Апгрейд" },
   { href: "/market", label: "Каталог" },
   { href: "/inventory", label: "Инвентарь" },
 ];

@@ -23,6 +23,8 @@ export const config = {
     "/inventory/:path*",
     "/balance/:path*",
     "/profile/:path*",
+    "/upgrade/:path*",
+    "/api/upgrade/:path*",
     "/api/cases/:path*",
     "/api/inventory/:path*",
   ],
