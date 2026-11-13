@@ -6,23 +6,41 @@ import { sellPrice } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import ItemCard from "@/components/ItemCard";
 import SellButton from "@/components/SellButton";
+import Pager from "@/components/Pager";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage({ searchParams }: { searchParams: { tab?: string } }) {
+const PER_PAGE = 20; // 4 ряда по 5 карточек
+
+export default async function InventoryPage({ searchParams }: { searchParams: { tab?: string; page?: string } }) {
   const user = await requireUser();
   const { sellCommission } = await getSettings();
   const showSold = searchParams.tab === "sold";
+  const where = { userId: user.id, isSold: showSold };
 
-  const inv = await prisma.inventoryItem.findMany({
-    where: { userId: user.id, isSold: showSold },
-    orderBy: showSold ? { soldAt: "desc" } : { acquiredAt: "desc" },
-    include: { item: { include: { catalog: true } } },
-    take: 300,
-  });
+  const count = await prisma.inventoryItem.count({ where });
+  const pages = Math.max(1, Math.ceil(count / PER_PAGE));
+  const page = Math.min(pages, Math.max(1, Math.floor(Number(searchParams.page)) || 1));
+
+  const [inv, all] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where,
+      orderBy: showSold ? { soldAt: "desc" } : { acquiredAt: "desc" },
+      include: { item: { include: { catalog: true } } },
+      skip: (page - 1) * PER_PAGE,
+      take: PER_PAGE,
+    }),
+    // сумма «Продать всё» считается по всему инвентарю, а не только по открытой странице
+    prisma.inventoryItem.findMany({
+      where,
+      select: { item: { select: { price: true, catalog: { select: { price: true } } } } },
+      take: showSold ? 0 : undefined, // для проданных сумма не нужна
+    }),
+  ]);
 
   const rows = inv.map((r) => ({ ...r, sell: sellPrice(r.item, sellCommission) }));
-  const total = rows.reduce((s, r) => s + r.sell, 0);
+  const total = Math.round(all.reduce((s, r) => s + sellPrice(r.item, sellCommission), 0) * 100) / 100;
+  const pageHref = (p: number) => `/inventory?${showSold ? "tab=sold&" : ""}page=${p}`;
 
   return (
     <div className="space-y-6">
@@ -38,10 +56,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: { 
             </Link>
           </div>
         </div>
-        {!showSold && rows.length > 0 && (
+        {!showSold && count > 0 && (
           <div className="flex items-center gap-4">
             <span className="text-sm text-dust">
-              {rows.length} шт. Комиссия при продаже {sellCommission}%
+              {count} шт. Комиссия при продаже {sellCommission}%
             </span>
             <SellButton all total={total} label={`Продать всё за ${money(total)}`} />
           </div>
@@ -78,6 +96,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: { 
           ))}
         </div>
       )}
+
+      <Pager page={page} pages={pages} href={pageHref} />
     </div>
   );
 }

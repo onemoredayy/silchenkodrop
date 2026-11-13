@@ -6,12 +6,15 @@ import { rarityColor } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import { upgradeChance } from "@/lib/upgrade";
 import SkinImage from "./SkinImage";
+import ItemCard from "./ItemCard";
+import Pager from "./Pager";
 
-type Inv = { id: string; name: string; rarity: string; image: string | null; price: number };
+type Inv = { id: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
 type Target = { marketHashName: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
 
 const MULTS = [1.5, 2, 3, 5, 10];
 const SPIN_MS = 4500;
+const PER_PAGE = 9; // 3 ряда по 3 карточки — и в инвентаре, и в целях
 
 export default function Upgrader({ inventory, edge, maxChance }: { inventory: Inv[]; edge: number; maxChance: number }) {
   const router = useRouter();
@@ -19,6 +22,9 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
   const [q, setQ] = useState("");
   const [stOnly, setStOnly] = useState("");
   const [targets, setTargets] = useState<Target[]>([]);
+  const [targetPage, setTargetPage] = useState(1);
+  const [targetPages, setTargetPages] = useState(1);
+  const [invPage, setInvPage] = useState(1);
   const [target, setTarget] = useState<Target | null>(null);
   const [spinning, setSpinning] = useState(false);
   const [angle, setAngle] = useState(0);
@@ -31,15 +37,32 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
   );
   const chance = target ? upgradeChance(value, target.price, edge, maxChance) : 0;
 
+  // страницы инвентаря; после апгрейда предметов становится меньше — не остаёмся на пустой странице
+  const invPages = Math.max(1, Math.ceil(inventory.length / PER_PAGE));
+  const invShown = inventory.slice((Math.min(invPage, invPages) - 1) * PER_PAGE, Math.min(invPage, invPages) * PER_PAGE);
+  useEffect(() => {
+    if (invPage > invPages) setInvPage(invPages);
+  }, [invPage, invPages]);
+
+  // сменилась ставка или фильтр — список целей начинается с первой страницы
+  useEffect(() => setTargetPage(1), [value, q, stOnly]);
+
   // подгружаем цели дороже ставки
   useEffect(() => {
+    let stale = false;
     const t = setTimeout(async () => {
-      const p = new URLSearchParams({ min: String(value), q, st: stOnly });
+      const p = new URLSearchParams({ min: String(value), q, st: stOnly, page: String(targetPage) });
       const res = await fetch(`/api/catalog/targets?${p}`);
-      if (res.ok) setTargets(await res.json());
+      if (!res.ok || stale) return;
+      const data = await res.json();
+      setTargets(data.rows ?? []);
+      setTargetPages(data.pages ?? 1);
     }, 250);
-    return () => clearTimeout(t);
-  }, [value, q, stOnly]);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [value, q, stOnly, targetPage]);
 
   useEffect(() => {
     if (target && target.price <= value) setTarget(null);
@@ -56,7 +79,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
     const p = new URLSearchParams({ min: String(value * m), st: stOnly });
     const res = await fetch(`/api/catalog/targets?${p}`);
     if (!res.ok) return;
-    const list: Target[] = await res.json();
+    const list: Target[] = (await res.json()).rows ?? [];
     if (list[0]) {
       setTarget(list[0]);
       setResult(null);
@@ -98,28 +121,30 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
       <section className="panel flex min-h-[420px] flex-col p-4">
         <div className="mb-3 flex items-baseline justify-between">
           <span className="font-medium">Твои скины</span>
-          <span className="text-sm text-dust">Ставка: {money(value)}</span>
+          <span className="text-sm text-dust">
+            {picked.length > 0 && `${picked.length} шт. · `}Ставка: {money(value)}
+          </span>
         </div>
         {inventory.length === 0 ? (
           <p className="text-sm text-dust">Инвентарь пуст. Открой кейс, и сюда будет что поставить.</p>
         ) : (
-          <div className="grid max-h-[460px] grid-cols-3 gap-2 overflow-y-auto pr-1">
-            {inventory.map((i) => {
-              const on = picked.includes(i.id);
-              return (
-                <button
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {invShown.map((i) => (
+                <ItemCard
                   key={i.id}
+                  name={i.name}
+                  rarity={i.rarity}
+                  image={i.image}
+                  wear={i.wear}
+                  price={i.price}
+                  selected={picked.includes(i.id)}
                   onClick={() => toggle(i.id)}
-                  className={`rounded border bg-raised/40 p-2 text-left text-xs ${on ? "border-stencil" : "border-line hover:border-dust"}`}
-                  style={{ boxShadow: `inset 0 -2px 0 ${rarityColor(i.rarity)}` }}
-                >
-                  <SkinImage src={i.image} name={i.name} className="h-12 w-full" />
-                  <div className="mt-1 truncate text-dust">{i.name}</div>
-                  <div>{money(i.price)}</div>
-                </button>
-              );
-            })}
-          </div>
+                />
+              ))}
+            </div>
+            <Pager page={Math.min(invPage, invPages)} pages={invPages} onPage={setInvPage} className="mt-auto pt-3" />
+          </>
         )}
       </section>
 
@@ -192,26 +217,22 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
             <option value="1">StatTrak</option>
           </select>
         </div>
-        <div className="max-h-[400px] space-y-1 overflow-y-auto pr-1">
+        <div className="grid grid-cols-3 gap-2">
           {targets.map((t) => (
-            <button
+            <ItemCard
               key={t.marketHashName}
+              name={t.name}
+              rarity={t.rarity}
+              image={t.image}
+              wear={t.wear}
+              price={t.price}
+              selected={target?.marketHashName === t.marketHashName}
               onClick={() => !spinning && (setTarget(t), setResult(null))}
-              className={`flex w-full items-center gap-2 rounded border px-2 py-1 text-left text-xs ${
-                target?.marketHashName === t.marketHashName ? "border-stencil" : "border-transparent hover:border-line"
-              }`}
-            >
-              <span className="h-6 w-1 shrink-0" style={{ background: rarityColor(t.rarity) }} />
-              <SkinImage src={t.image} name={t.name} className="h-8 w-10 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">
-                {t.name}
-                {t.wear && <span className="text-dust"> ({t.wear})</span>}
-              </span>
-              <span>{money(t.price)}</span>
-            </button>
+            />
           ))}
-          {targets.length === 0 && <p className="text-sm text-dust">Ничего не нашлось.</p>}
         </div>
+        {targets.length === 0 && <p className="text-sm text-dust">Ничего не нашлось.</p>}
+        <Pager page={targetPage} pages={targetPages} onPage={setTargetPage} className="mt-auto pt-3" />
       </section>
     </div>
   );

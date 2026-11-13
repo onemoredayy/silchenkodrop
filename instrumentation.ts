@@ -11,6 +11,13 @@ export async function register() {
   const { updateAllPrices } = await import("./lib/prices");
 
   async function tick() {
+    // блок «Шелупонь» создаётся сам при первом запуске после обновления сайта
+    try {
+      const { ensureJunkCases } = await import("./lib/junk-cases");
+      await ensureJunkCases(prisma, (m) => console.log(`[шелупонь] ${m}`));
+    } catch (e) {
+      console.error("[шелупонь] не удалось создать блок:", (e as Error).message);
+    }
     try {
       const last = await prisma.siteSetting.findUnique({ where: { key: "pricesUpdatedAt" } });
       const age = last ? Date.now() - new Date(last.value).getTime() : Infinity;

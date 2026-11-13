@@ -3,7 +3,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { mapCatalogRarity } from "./rarity";
 
-const API = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en";
+export const API = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en";
 export const SKINS_URL = `${API}/skins_not_grouped.json`;
 export const CRATES_URL = `${API}/crates.json`;
 
