@@ -15,7 +15,6 @@ export default async function UpgradePage() {
       where: { userId: user.id, isSold: false },
       orderBy: { acquiredAt: "desc" },
       include: { item: { include: { catalog: true } } },
-      take: 300,
     }),
     prisma.upgrade.findMany({
       where: { userId: user.id },
@@ -42,6 +41,7 @@ export default async function UpgradePage() {
           name: r.item.name,
           rarity: r.item.rarity,
           image: r.item.image,
+          wear: r.item.wear,
           price: itemPrice(r.item),
         }))}
       />

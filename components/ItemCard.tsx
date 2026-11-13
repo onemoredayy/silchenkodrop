@@ -10,14 +10,26 @@ type Props = {
   wear?: string | null;
   chance?: number;
   footer?: React.ReactNode;
+  // для выбора карточки кликом (апгрейд)
+  selected?: boolean;
+  onClick?: () => void;
 };
 
 // Как в инвентаре CS2: цвет редкости — полоса снизу, без свечения
-export default function ItemCard({ name, rarity, image, price, wear, chance, footer }: Props) {
+export default function ItemCard({ name, rarity, image, price, wear, chance, footer, selected, onClick }: Props) {
   const [weapon, skin] = name.split(" | ");
   const color = rarityColor(rarity);
   return (
-    <div className="flex flex-col overflow-hidden rounded-card border border-line bg-panel">
+    <div
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick()) : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-pressed={onClick ? !!selected : undefined}
+      className={`flex flex-col overflow-hidden rounded-card border bg-panel text-left ${
+        selected ? "border-stencil" : onClick ? "border-line hover:border-dust" : "border-line"
+      } ${onClick ? "cursor-pointer select-none" : ""}`}
+    >
       <div className="relative aspect-[4/3] bg-raised/50 p-3">
         <SkinImage src={image} name={name} className="h-full w-full" />
         {chance != null && (

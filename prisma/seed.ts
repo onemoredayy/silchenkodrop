@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { findDefault, importCatalog } from "../lib/catalog";
 import { updateAllPrices } from "../lib/prices";
 import { importOfficialCases } from "../lib/official-cases";
+import { importJunkCases } from "../lib/junk-cases";
 import { DEFAULT_SETTINGS } from "../lib/settings";
 
 const prisma = new PrismaClient();
@@ -29,6 +30,7 @@ const SECTIONS = [
   { slug: "operation", name: "Операция «Дать на клык»" },
   { slug: "official", name: "Обычные кейсы" },
 ];
+// Блок «Шелупонь» создаётся отдельно — lib/junk-cases.ts
 
 const CASES: {
   section: string;
@@ -231,7 +233,14 @@ async function main() {
     console.warn("! Обычные кейсы не загрузились:", (e as Error).message);
   }
 
-  // 6. Тестовый админ (настоящим админом станет первый, кто войдёт через Steam)
+  // 6. Блок «Шелупонь»: наклейки, значки, нашивки
+  try {
+    await importJunkCases(prisma);
+  } catch (e) {
+    console.warn("! Блок «Шелупонь» не создан:", (e as Error).message);
+  }
+
+  // 7. Тестовый админ (настоящим админом станет первый, кто войдёт через Steam)
   await prisma.user.upsert({
     where: { steamId: "76561198000000000" },
     update: {},

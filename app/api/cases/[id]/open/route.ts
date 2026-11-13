@@ -16,7 +16,10 @@ class OpenError extends Error {
   }
 }
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+const MAX_COUNT = 5; // сколько кейсов можно открыть за один раз
+
+// body: { count?: 1..5 }
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Нужно войти через Steam" }, { status: 401 });
   if (user.isBanned) return NextResponse.json({ error: "Аккаунт заблокирован" }, { status: 403 });
@@ -25,6 +28,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (!rateLimit(`open:${user.id}`, 1, 2000) || !rateLimit(`open-m:${user.id}`, 20, 60_000)) {
     return NextResponse.json({ error: "Слишком часто. Подожди пару секунд" }, { status: 429 });
   }
+
+  const body = (await req.json().catch(() => ({}))) as { count?: unknown };
+  const count = Math.min(MAX_COUNT, Math.max(1, Math.floor(Number(body.count)) || 1));
 
   const { trollChance } = await getSettings();
 
@@ -40,62 +46,67 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       const sum = rows.reduce((s, r) => s + r.dropChance, 0);
       if (Math.abs(sum - 100) > 0.01) throw new OpenError("Шансы кейса настроены неверно (сумма ≠ 100%)");
 
-      // Атомарное списание: пройдёт, только если денег хватает прямо сейчас
+      // Атомарное списание сразу за все кейсы: пройдёт, только если денег хватает прямо сейчас
+      const cost = round2(kase.price * count);
       const charged = await tx.user.updateMany({
-        where: { id: user.id, balance: { gte: kase.price }, isBanned: false },
-        data: { balance: { decrement: kase.price } },
+        where: { id: user.id, balance: { gte: cost }, isBanned: false },
+        data: { balance: { decrement: cost } },
       });
       if (charged.count === 0) throw new OpenError("Недостаточно средств на балансе", 402);
 
-      const win = pickWeighted(rows);
-      const price = round2(itemPrice(win.item));
-
-      await tx.opening.create({
-        data: { userId: user.id, caseId: kase.id, itemId: win.itemId, pricePaid: kase.price, itemPrice: price },
-      });
-      const inv = await tx.inventoryItem.create({
-        data: { userId: user.id, itemId: win.itemId, dropPrice: price },
-      });
-      await tx.transaction.create({
-        data: {
-          userId: user.id,
-          type: "OPEN",
-          amount: -kase.price,
-          meta: JSON.stringify({ case: kase.name, item: win.item.name }),
-        },
-      });
-      const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id }, select: { balance: true } });
-
-      // «Пук-прокрутка»: только визуал. Предмет уже выбран выше честным RNG,
-      // лента лишь сначала притормозит на самом дорогом предмете кейса.
       const top = rows.reduce((a, b) => (itemPrice(b.item) > itemPrice(a.item) ? b : a));
-      const troll =
-        top.itemId !== win.itemId &&
-        itemPrice(top.item) > price * 2 &&
-        randomInt(0, 10_000) < Math.round(trollChance * 100)
-          ? {
-              id: top.item.id,
-              name: top.item.name,
-              rarity: top.item.rarity,
-              image: top.item.image,
-              wear: top.item.wear,
-              price: round2(itemPrice(top.item)),
-            }
-          : null;
+      const drops = [];
+      for (let i = 0; i < count; i++) {
+        // каждый кейс — отдельный честный бросок
+        const win = pickWeighted(rows);
+        const price = round2(itemPrice(win.item));
 
-      return {
-        troll,
-        inventoryId: inv.id,
-        balance: fresh.balance,
-        item: {
-          id: win.item.id,
-          name: win.item.name,
-          rarity: win.item.rarity,
-          image: win.item.image,
-          wear: win.item.wear,
-          price,
-        },
-      };
+        await tx.opening.create({
+          data: { userId: user.id, caseId: kase.id, itemId: win.itemId, pricePaid: kase.price, itemPrice: price },
+        });
+        const inv = await tx.inventoryItem.create({
+          data: { userId: user.id, itemId: win.itemId, dropPrice: price },
+        });
+        await tx.transaction.create({
+          data: {
+            userId: user.id,
+            type: "OPEN",
+            amount: -kase.price,
+            meta: JSON.stringify({ case: kase.name, item: win.item.name }),
+          },
+        });
+
+        // «Пук-прокрутка»: только визуал. Предмет уже выбран выше честным RNG,
+        // лента лишь сначала притормозит на самом дорогом предмете кейса.
+        const troll =
+          top.itemId !== win.itemId &&
+          itemPrice(top.item) > price * 2 &&
+          randomInt(0, 10_000) < Math.round(trollChance * 100)
+            ? {
+                id: top.item.id,
+                name: top.item.name,
+                rarity: top.item.rarity,
+                image: top.item.image,
+                wear: top.item.wear,
+                price: round2(itemPrice(top.item)),
+              }
+            : null;
+
+        drops.push({
+          troll,
+          inventoryId: inv.id,
+          item: {
+            id: win.item.id,
+            name: win.item.name,
+            rarity: win.item.rarity,
+            image: win.item.image,
+            wear: win.item.wear,
+            price,
+          },
+        });
+      }
+      const fresh = await tx.user.findUniqueOrThrow({ where: { id: user.id }, select: { balance: true } });
+      return { drops, balance: fresh.balance };
     });
     return NextResponse.json(result);
   } catch (e) {
