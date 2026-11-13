@@ -1,106 +1,72 @@
-import { PrismaClient } from "@prisma/client"
+// Обновление цен со Steam Market небольшими порциями.
+// Steam банит IP за частые запросы, поэтому: ~20 скинов за запуск, пауза 3.5 с между запросами.
+// На VPS повесь на cron каждые 15 минут — весь каталог обновится примерно за 2–3 дня.
+//
+//   BATCH=20 DELAY=3500 npm run prices:update
+//
+// Цены в рублях (currency=5). Из датацентров Azure/Codespaces Steam отвечает 429 — это нормально.
+import { PrismaClient } from "@prisma/client";
+import { parseSteamPrice } from "../lib/catalog";
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
+const BATCH = Number(process.env.BATCH || 20);
+const DELAY = Number(process.env.DELAY || 3500);
+const CURRENCY = Number(process.env.CURRENCY || 5);
 
-// Уменьшено для теста — потом на VPS вернём к 40
-const BATCH_SIZE = 5
-
-// Увеличено для теста — Steam жёстко банит частые запросы с датацентровских IP
-const DELAY_MS = 10000
-
-const APP_ID = 730
-
-interface PriceOverviewResponse {
-  success: boolean
-  lowest_price?: string
-  median_price?: string
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function parsePrice(raw?: string): number | null {
-  if (!raw) return null
-  const cleaned = raw.replace(/[^\d.,]/g, "").replace(",", ".")
-  const num = parseFloat(cleaned)
-  return isNaN(num) ? null : num
-}
-
-async function fetchPrice(marketHashName: string): Promise<number | null> {
-  const url = `https://steamcommunity.com/market/priceoverview/?appid=${APP_ID}&currency=5&market_hash_name=${encodeURIComponent(
-    marketHashName
-  )}`
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json",
-      },
-    })
-
-    const text = await res.text()
-    console.log(
-      `  [debug] HTTP ${res.status} для "${marketHashName}": ${text.slice(0, 150)}`
-    )
-
-    if (res.status === 429) {
-      console.log("  ⚠ Steam вернул 429 (rate limit) — IP этой сети временно заблокирован Steam'ом")
-      return null
-    }
-
-    if (!res.ok) return null
-
-    const data: PriceOverviewResponse = JSON.parse(text)
-    if (!data.success) return null
-    return parsePrice(data.lowest_price) ?? parsePrice(data.median_price)
-  } catch (err) {
-    console.log(`  Ошибка запроса для "${marketHashName}":`, err)
-    return null
-  }
-}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
-  console.log(`Тестовый запуск: ${BATCH_SIZE} скинов, пауза ${DELAY_MS / 1000} сек между запросами`)
+  // Сначала — предметы из кейсов, потом — давно не обновлявшиеся
+  const inCases = await prisma.skinCatalog.findMany({
+    where: { items: { some: {} } },
+    orderBy: { lastPriceUpdate: { sort: "asc", nulls: "first" } },
+    take: BATCH,
+  });
+  const rest =
+    inCases.length < BATCH
+      ? await prisma.skinCatalog.findMany({
+          where: { id: { notIn: inCases.map((r) => r.id) } },
+          orderBy: { lastPriceUpdate: { sort: "asc", nulls: "first" } },
+          take: BATCH - inCases.length,
+        })
+      : [];
+  // предметы кейсов, обновлённые меньше 12 ч назад, не трогаем повторно
+  const fresh = Date.now() - 12 * 3600 * 1000;
+  const batch = [
+    ...inCases.filter((r) => !r.lastPriceUpdate || r.lastPriceUpdate.getTime() < fresh),
+    ...rest,
+  ].slice(0, BATCH);
 
-  const batch = await prisma.skinCatalog.findMany({
-    orderBy: [{ lastPriceUpdate: { sort: "asc", nulls: "first" } }],
-    take: BATCH_SIZE,
-  })
-
-  console.log(`Взято в работу: ${batch.length} скинов`)
-
-  let updated = 0
-  let failed = 0
-
-  for (const skin of batch) {
-    const price = await fetchPrice(skin.marketHashName)
-
-    if (price !== null) {
-      await prisma.skinCatalog.update({
-        where: { id: skin.id },
-        data: { price, lastPriceUpdate: new Date() },
-      })
-      updated++
-      console.log(`  ✓ ${skin.marketHashName}: ${price}`)
-    } else {
-      // В тестовом режиме НЕ отмечаем lastPriceUpdate при неудаче,
-      // чтобы можно было пересдать тот же скин на следующем тесте
-      failed++
-      console.log(`  ✗ ${skin.marketHashName}: цена не найдена`)
+  let ok = 0;
+  for (const row of batch) {
+    const url =
+      `https://steamcommunity.com/market/priceoverview/?appid=730&currency=${CURRENCY}` +
+      `&market_hash_name=${encodeURIComponent(row.marketHashName)}`;
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 silchenkodrop" } });
+    if (res.status === 429) {
+      console.warn("Steam: 429 (слишком часто). Останавливаюсь до следующего запуска.");
+      break;
     }
-
-    await sleep(DELAY_MS)
+    let price: number | null = null;
+    if (res.ok) {
+      const j = (await res.json()) as { success?: boolean; lowest_price?: string; median_price?: string };
+      if (j.success) price = parseSteamPrice(j.lowest_price) ?? parseSteamPrice(j.median_price);
+    }
+    await prisma.skinCatalog.update({
+      where: { id: row.id },
+      // даже без цены ставим дату, чтобы не застревать на одном скине
+      data: { lastPriceUpdate: new Date(), ...(price != null ? { price } : {}) },
+    });
+    if (price != null) ok++;
+    console.log(`${row.marketHashName}: ${price ?? "нет на рынке"}`);
+    await sleep(DELAY);
   }
-
-  console.log(`Готово. Обновлено: ${updated}, без цены: ${failed}`)
-  await prisma.$disconnect()
+  console.log(`Обновлено цен: ${ok} из ${batch.length}`);
 }
 
-main().catch(async (e) => {
-  console.error(e)
-  await prisma.$disconnect()
-  process.exit(1)
-})
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

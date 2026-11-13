@@ -7,48 +7,50 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// role: "USER" | "ADMIN"   (SQLite не умеет enum — поэтому строки)
 model User {
-  id        String   @id @default(cuid())
-  steamId   String   @unique
-  username  String
-  avatar    String?
-  balance   Float    @default(0)
-  role      String   @default("USER")
-  isBanned  Boolean  @default(false)
-  createdAt DateTime @default(now())
-
+  id           String          @id @default(cuid())
+  steamId      String          @unique
+  username     String
+  avatar       String?
+  balance      Float           @default(0)
+  role         String          @default("USER")
+  isBanned     Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  lastLoginAt  DateTime        @default(now())
   openings     Opening[]
   inventory    InventoryItem[]
   transactions Transaction[]
 }
 
 model Case {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   name        String
-  slug        String   @unique
-  price       Float
+  slug        String     @unique
+  price       Float // цену кейса ставит админ вручную
   image       String?
   description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-
-  items    CaseItem[]
-  openings Opening[]
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  items       CaseItem[]
+  openings    Opening[]
 }
 
+// rarity: COMMON | UNCOMMON | RARE | MYTHICAL | LEGENDARY | ANCIENT
 model Item {
-  id             String  @id @default(cuid())
+  id             String          @id @default(cuid())
   name           String
   rarity         String
-  price          Float
+  price          Float // запасная цена, если нет цены из каталога
   image          String?
   wear           String?
-  statTrak       Boolean @default(false)
-  marketHashName String? @unique
-
-  cases     CaseItem[]
-  openings  Opening[]
-  inventory InventoryItem[]
+  statTrak       Boolean         @default(false)
+  marketHashName String?
+  catalog        SkinCatalog?    @relation(fields: [marketHashName], references: [marketHashName])
+  cases          CaseItem[]
+  openings       Opening[]
+  inventory      InventoryItem[]
 }
 
 model CaseItem {
@@ -56,9 +58,8 @@ model CaseItem {
   caseId     String
   itemId     String
   dropChance Float
-
-  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  case       Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  item       Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, itemId])
 }
@@ -69,29 +70,31 @@ model Opening {
   caseId    String
   itemId    String
   pricePaid Float
+  itemPrice Float
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  user User @relation(fields: [userId], references: [id])
-  case Case @relation(fields: [caseId], references: [id])
-  item Item @relation(fields: [itemId], references: [id])
-
-  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model InventoryItem {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   itemId     String
-  acquiredAt DateTime @default(now())
-  isSold     Boolean  @default(false)
+  dropPrice  Float
+  acquiredAt DateTime  @default(now())
+  isSold     Boolean   @default(false)
   soldPrice  Float?
-
-  user User @relation(fields: [userId], references: [id])
-  item Item @relation(fields: [itemId], references: [id])
+  soldAt     DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item       Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([userId, isSold])
 }
 
+// type: DEPOSIT | OPEN | SELL | ADMIN
 model Transaction {
   id        String   @id @default(cuid())
   userId    String
@@ -99,8 +102,7 @@ model Transaction {
   amount    Float
   meta      String?
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
@@ -110,18 +112,22 @@ model SiteSetting {
   value String
 }
 
+// Полный каталог скинов CS2 (из ByMykel/CSGO-API), цены — со Steam Market
 model SkinCatalog {
   id              String    @id @default(cuid())
   marketHashName  String    @unique
   name            String
-  weapon          String?
-  rarity          String?
+  weapon          String
+  rarity          String
+  rarityColor     String?
   wear            String?
-  statTrak        Boolean   @default(false)
   image           String?
   price           Float?
   lastPriceUpdate DateTime?
   createdAt       DateTime  @default(now())
+  items           Item[]
 
+  @@index([name])
+  @@index([weapon])
   @@index([lastPriceUpdate])
 }

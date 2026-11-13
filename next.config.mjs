@@ -1,15 +1,14 @@
 /** @type {import('next').NextConfig} */
-const codespaceHost = process.env.CODESPACE_NAME
-  ? `${process.env.CODESPACE_NAME}-3000.app.github.dev`
-  : "localhost:3000";
+const extraOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const nextConfig = {
-  experimental: {
-    serverActions: {
-      // Разрешаем действия с адреса Codespaces и с localhost
-      allowedOrigins: ["localhost:3000", codespaceHost, "*.app.github.dev"],
-    },
-  },
+  eslint: { ignoreDuringBuilds: true },
+  experimental: extraOrigins.length
+    ? { serverActions: { allowedOrigins: extraOrigins } }
+    : {},
 };
 
 export default nextConfig;

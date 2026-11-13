@@ -1,125 +1,52 @@
-export type ItemData = {
+import { rarityColor } from "@/lib/rarity";
+import { money } from "@/lib/format";
+import SkinImage from "./SkinImage";
+
+type Props = {
   name: string;
   rarity: string;
-  price: number;
-  image: string;
-  wear: string | null;
-  statTrak: boolean;
+  image?: string | null;
+  price?: number;
+  wear?: string | null;
+  chance?: number;
+  footer?: React.ReactNode;
 };
 
-type RarityStyle = {
-  label: string;
-  text: string;
-  border: string;
-  bg: string;
-  bar: string;
-};
-
-// Цвета редкости (классы записаны целиком, чтобы Tailwind их увидел)
-export const RARITY: Record<string, RarityStyle> = {
-  COMMON: {
-    label: "Обычный",
-    text: "text-zinc-300",
-    border: "border-zinc-500/60",
-    bg: "from-zinc-500/25",
-    bar: "bg-zinc-400",
-  },
-  UNCOMMON: {
-    label: "Необычный",
-    text: "text-blue-400",
-    border: "border-blue-500/60",
-    bg: "from-blue-500/25",
-    bar: "bg-blue-500",
-  },
-  RARE: {
-    label: "Редкий",
-    text: "text-sky-300",
-    border: "border-sky-400/60",
-    bg: "from-sky-400/25",
-    bar: "bg-sky-400",
-  },
-  MYTHICAL: {
-    label: "Мифический",
-    text: "text-purple-400",
-    border: "border-purple-500/60",
-    bg: "from-purple-500/25",
-    bar: "bg-purple-500",
-  },
-  LEGENDARY: {
-    label: "Легендарный",
-    text: "text-pink-400",
-    border: "border-pink-500/60",
-    bg: "from-pink-500/25",
-    bar: "bg-pink-500",
-  },
-  ANCIENT: {
-    label: "Древний",
-    text: "text-red-400",
-    border: "border-red-500/60",
-    bg: "from-red-500/25",
-    bar: "bg-red-500",
-  },
-};
-
-export function rarityOf(rarity: string): RarityStyle {
-  return RARITY[rarity] ?? RARITY.COMMON;
-}
-
-const WEAR_SHORT: Record<string, string> = {
-  "Factory New": "FN",
-  "Minimal Wear": "MW",
-  "Field-Tested": "FT",
-  "Well-Worn": "WW",
-  "Battle-Scarred": "BS",
-};
-
-type ItemCardProps = {
-  item: ItemData;
-  compact?: boolean;
-};
-
-export default function ItemCard({ item, compact = false }: ItemCardProps) {
-  const r = rarityOf(item.rarity);
-  const parts = item.name.split(" | ");
-  const weapon = parts[0];
-  const skin = parts[1] ?? "";
-  const wear = item.wear ? (WEAR_SHORT[item.wear] ?? item.wear) : "";
-
+// Как в инвентаре CS2: цвет редкости — полоса снизу, без свечения
+export default function ItemCard({ name, rarity, image, price, wear, chance, footer }: Props) {
+  const [weapon, skin] = name.split(" | ");
+  const color = rarityColor(rarity);
   return (
-    <div
-      className={`relative flex h-full w-full flex-col overflow-hidden rounded-lg border bg-gradient-to-b to-card ${r.border} ${r.bg}`}
-    >
-      <div className="relative flex flex-1 items-center justify-center p-2">
-        <span className="text-xl font-black tracking-widest text-white/10">CS2</span>
-        {item.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.image}
-            alt={item.name}
-            className="absolute inset-0 h-full w-full object-contain p-2"
-          />
-        ) : null}
-        {item.statTrak ? (
-          <span className="absolute left-1.5 top-1.5 text-[10px] font-bold text-orange-400">
-            ST™
-          </span>
-        ) : null}
+    <div className="flex flex-col overflow-hidden rounded-card border border-line bg-panel">
+      <div className="relative aspect-[4/3] bg-raised/50 p-3">
+        <SkinImage src={image} name={name} className="h-full w-full" />
+        {chance != null && (
+          <span className="absolute right-2 top-2 text-xs text-dust">{chance.toFixed(chance < 1 ? 2 : 1)}%</span>
+        )}
       </div>
-
-      <div className="px-2 pb-2">
-        <p className="truncate text-[11px] text-muted-foreground">{weapon}</p>
-        <p className={`truncate text-sm font-semibold ${r.text}`}>{skin || weapon}</p>
-        {!compact ? (
-          <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{wear}</span>
-            <span className="font-semibold text-foreground">
-              {item.price.toLocaleString("ru-RU")} ₽
-            </span>
-          </div>
-        ) : null}
+      <div className="h-[3px]" style={{ background: color }} />
+      <div className="flex flex-1 flex-col gap-0.5 p-3">
+        <div className="truncate text-xs text-dust">{weapon}</div>
+        <div className="truncate text-sm font-medium" title={name}>
+          {skin ?? weapon}
+        </div>
+        <div className="mt-1 flex items-baseline justify-between gap-2 text-sm">
+          {price != null && <span>{money(price)}</span>}
+          {wear && <span className="truncate text-xs text-dust">{wearRu(wear)}</span>}
+        </div>
+        {footer && <div className="mt-2">{footer}</div>}
       </div>
-
-      <div className={`h-1 w-full ${r.bar}`} />
     </div>
   );
+}
+
+const WEAR_RU: Record<string, string> = {
+  "Factory New": "Прямо с завода",
+  "Minimal Wear": "Немного поношенное",
+  "Field-Tested": "После полевых",
+  "Well-Worn": "Поношенное",
+  "Battle-Scarred": "Закалённое в боях",
+};
+export function wearRu(w: string) {
+  return WEAR_RU[w] ?? w;
 }

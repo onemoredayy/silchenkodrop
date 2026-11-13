@@ -1,151 +1,62 @@
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, requireAdmin } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
+import { money } from "@/lib/format";
+import Avatar from "@/components/Avatar";
+import { grantBalance, toggleAdmin, toggleBan } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-function money(n: number): string {
-  return n.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
-}
-
-async function grantBalance(formData: FormData) {
-  "use server";
-  const admin = await requireAdmin();
-  const userId = String(formData.get("userId"));
-  const amount = Number(formData.get("amount"));
-  if (!Number.isFinite(amount) || amount === 0) return;
-
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: userId },
-      data: { balance: { increment: amount } },
-    }),
-    prisma.transaction.create({
-      data: {
-        userId,
-        type: "ADMIN_GRANT",
-        amount,
-        meta: JSON.stringify({ byAdminId: admin.id }),
-      },
-    }),
-  ]);
-  revalidatePath("/admin/users");
-}
-
-async function toggleBan(formData: FormData) {
-  "use server";
-  const admin = await requireAdmin();
-  const userId = String(formData.get("userId"));
-  const isBanned = formData.get("isBanned") === "1";
-  if (userId === admin.id) throw new Error("Нельзя забанить самого себя");
-  await prisma.user.update({ where: { id: userId }, data: { isBanned: !isBanned } });
-  revalidatePath("/admin/users");
-}
-
-async function toggleAdmin(formData: FormData) {
-  "use server";
-  const admin = await requireAdmin();
-  const userId = String(formData.get("userId"));
-  const role = String(formData.get("role"));
-  if (userId === admin.id) throw new Error("Нельзя снять админку с самого себя");
-  await prisma.user.update({
-    where: { id: userId },
-    data: { role: role === "ADMIN" ? "USER" : "ADMIN" },
+export default async function AdminUsers({ searchParams }: { searchParams: { q?: string } }) {
+  const me = await getCurrentUser();
+  const q = (searchParams.q ?? "").trim();
+  const users = await prisma.user.findMany({
+    where: q ? { OR: [{ username: { contains: q } }, { steamId: { contains: q } }] } : {},
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: { _count: { select: { openings: true } } },
   });
-  revalidatePath("/admin/users");
-}
-
-export default async function AdminUsersPage() {
-  const [me, users] = await Promise.all([
-    getCurrentUser(),
-    prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
-  ]);
-
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">Пользователи</h2>
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary/40 text-left text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2">Игрок</th>
-              <th className="px-4 py-2">Баланс</th>
-              <th className="px-4 py-2">Роль</th>
-              <th className="px-4 py-2">Статус</th>
-              <th className="px-4 py-2">Выдать баланс</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {users.map((u) => {
-              const isMe = u.id === me?.id;
-              return (
-                <tr key={u.id}>
-                  <td className="px-4 py-2">
-                    <p className="font-medium">
-                      {u.username}
-                      {isMe ? <span className="ml-1 text-xs text-muted-foreground">(ты)</span> : null}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{u.steamId}</p>
-                  </td>
-                  <td className="px-4 py-2">{money(u.balance)} ₽</td>
-                  <td className="px-4 py-2">
-                    <form action={toggleAdmin}>
-                      <input type="hidden" name="userId" value={u.id} />
-                      <input type="hidden" name="role" value={u.role} />
-                      <button
-                        type="submit"
-                        disabled={isMe}
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold disabled:opacity-50 ${
-                          u.role === "ADMIN"
-                            ? "bg-violet-500/20 text-violet-300"
-                            : "bg-zinc-500/20 text-zinc-400"
-                        }`}
-                      >
-                        {u.role === "ADMIN" ? "Админ" : "Игрок"}
-                      </button>
-                    </form>
-                  </td>
-                  <td className="px-4 py-2">
-                    <form action={toggleBan}>
-                      <input type="hidden" name="userId" value={u.id} />
-                      <input type="hidden" name="isBanned" value={u.isBanned ? "1" : "0"} />
-                      <button
-                        type="submit"
-                        disabled={isMe}
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold disabled:opacity-50 ${
-                          u.isBanned
-                            ? "bg-red-500/20 text-red-400"
-                            : "bg-emerald-500/20 text-emerald-400"
-                        }`}
-                      >
-                        {u.isBanned ? "Забанен" : "Активен"}
-                      </button>
-                    </form>
-                  </td>
-                  <td className="px-4 py-2">
-                    <form action={grantBalance} className="flex gap-1">
-                      <input type="hidden" name="userId" value={u.id} />
-                      <input
-                        name="amount"
-                        type="number"
-                        step="0.01"
-                        placeholder="±₽"
-                        className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                      />
-                      <button
-                        type="submit"
-                        className="rounded-md bg-secondary px-2 py-1 text-xs"
-                      >
-                        Выдать
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <h1 className="h1">Игроки</h1>
+      <form>
+        <input name="q" defaultValue={q} placeholder="Ник или SteamID" className="input max-w-sm" />
+      </form>
+      <div className="space-y-2">
+        {users.map((u) => (
+          <div key={u.id} className={`panel flex flex-wrap items-center gap-4 p-3 ${u.isBanned ? "opacity-60" : ""}`}>
+            <Avatar src={u.avatar} name={u.username} size={40} />
+            <div className="min-w-[10rem] flex-1">
+              <div className="font-medium">
+                {u.username}
+                {u.role === "ADMIN" && <span className="ml-2 text-xs text-stencil">админ</span>}
+                {u.isBanned && <span className="ml-2 text-xs text-danger">заблокирован</span>}
+              </div>
+              <div className="text-xs text-dust">
+                {u.steamId}, открытий: {u._count.openings}
+              </div>
+            </div>
+            <div className="w-28 text-right">{money(u.balance)}</div>
+            <form action={grantBalance} className="flex gap-2">
+              <input type="hidden" name="userId" value={u.id} />
+              <input name="amount" type="number" step="0.01" placeholder="± сумма" className="input h-9 w-28" />
+              <input name="note" placeholder="за что" className="input h-9 w-28" />
+              <button className="btn-ghost h-9">Начислить</button>
+            </form>
+            {u.id !== me?.id && (
+              <div className="flex gap-2">
+                <form action={toggleBan}>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <button className={u.isBanned ? "btn-ghost h-9" : "btn-danger h-9"}>{u.isBanned ? "Разбанить" : "Забанить"}</button>
+                </form>
+                <form action={toggleAdmin}>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <button className="btn-ghost h-9">{u.role === "ADMIN" ? "Снять админа" : "Сделать админом"}</button>
+                </form>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
-                          }
+}

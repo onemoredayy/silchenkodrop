@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# СильченкоДроп
 
-## Getting Started
+Кейсы CS2 для своих. Next.js 14, Prisma + SQLite, вход через Steam OpenID.
 
-First, run the development server:
+## Локально
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env          # вписать SESSION_SECRET
+npm run db:push && npm run db:seed
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`db:seed` качает каталог скинов (~2000 шт.) с GitHub и создаёт 5 кейсов. Первый вошедший через Steam становится админом.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## На хостинге (VPS, Ubuntu)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs
+sudo npm i -g pm2
 
-## Learn More
+git clone https://github.com/onemoredayy/silchenkodrop.git && cd silchenkodrop
+cp .env.example .env && sed -i "s/SESSION_SECRET=\"\"/SESSION_SECRET=\"$(openssl rand -hex 32)\"/" .env
+npm ci
+npm run db:push && npm run db:seed
+npm run build
+pm2 start npm --name silchenkodrop -- start && pm2 save && pm2 startup
+```
 
-To learn more about Next.js, take a look at the following resources:
+Перед сайтом — Caddy (сам получает HTTPS-сертификат). `/etc/caddy/Caddyfile`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+твой-домен.ru {
+    reverse_proxy localhost:3000
+}
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Адрес сайта для входа через Steam определяется по запросу, прописывать его не нужно.
 
-## Deploy on Vercel
+### Цены со Steam Market
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Обновляются порциями по 20 скинов (Steam банит за частые запросы). `crontab -e`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+*/15 * * * * cd /home/USER/silchenkodrop && npm run prices:update >> prices.log 2>&1
+```
+
+Весь каталог обновляется за 2–3 дня, предметы из кейсов — первыми. Цена Steam главнее ручной цены предмета. Цену кейса задаёт админ, сайт только подсказывает средний дроп.
+
+### Обновление сайта
+
+```bash
+git pull && npm ci && npm run db:push && npm run build && pm2 restart silchenkodrop
+```
+
+## Команды
+
+| Команда | Что делает |
+|---|---|
+| `npm run dev` | разработка |
+| `npm run build` / `npm start` | сборка и запуск |
+| `npm run db:push` | применить схему к базе |
+| `npm run db:seed` | каталог, кейсы, настройки |
+| `npm run db:reset` | стереть базу и наполнить заново |
+| `npm run catalog:import` | обновить каталог скинов |
+| `npm run prices:update` | обновить порцию цен |
+
+## Устройство
+
+- Вход: `lib/steam.ts`, `app/api/auth/steam/*`; сессия — подписанная кука (`lib/session.ts`).
+- Выпадение считается на сервере (`lib/rng.ts`, crypto.randomInt), списание атомарное, лимит частоты открытий.
+- `middleware.ts` закрывает `/admin`, `/inventory`, `/balance`, `/profile`; роль админа проверяется в каждом действии админки.
+- Пополнение баланса — заглушка (`app/balance/actions.ts`), вывод скинов не сделан.

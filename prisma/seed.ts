@@ -1,192 +1,212 @@
+// Наполнение базы: каталог скинов, 5 кейсов, админ.
+// Запуск: npm run setup   (или повторно: npx tsx prisma/seed.ts)
 import { PrismaClient } from "@prisma/client";
+import { importCatalog } from "../lib/catalog";
+import { DEFAULT_SETTINGS } from "../lib/settings";
 
 const prisma = new PrismaClient();
 
-// steamId админа (потом замени на свой SteamID64)
-const ADMIN_STEAM_ID = "76561198000000000";
-const MARGIN = 1.15; // наценка на кейс
-const SELL_COMMISSION = 0.05; // комиссия при продаже скина
+type Seed = [name: string, rarity: string, price: number];
 
-const R = {
-  C: "COMMON",
-  U: "UNCOMMON",
-  R: "RARE",
-  M: "MYTHICAL",
-  L: "LEGENDARY",
-  A: "ANCIENT",
-} as const;
-type Code = keyof typeof R;
+// Вес выпадения по редкости — потом нормализуется до 100% внутри кейса.
+// Шансы можно поменять в админке.
+const WEIGHT: Record<string, number> = {
+  COMMON: 40,
+  UNCOMMON: 25,
+  RARE: 15,
+  MYTHICAL: 8,
+  LEGENDARY: 3,
+  ANCIENT: 1,
+};
 
-// [название, редкость, цена в ₽, износ, StatTrak]
-type Row = [string, Code, number, string, boolean?];
-
-// Базовые веса редкости. Внутри кейса нормализуются до суммы 100%
-const WEIGHT: Record<Code, number> = { C: 40, U: 25, R: 18, M: 10, L: 5, A: 2 };
-
-const CASES: { name: string; slug: string; description: string; items: Row[] }[] = [
+const CASES: {
+  name: string;
+  slug: string;
+  price: number;
+  description: string;
+  items: Seed[];
+}[] = [
   {
-    name: "Стартовый кейс",
-    slug: "starter",
-    description: "Недорогие скины для разгона",
+    name: "Первый шаг",
+    slug: "first-step",
+    price: 49,
+    description: "Дешёвый вход. В основном ширпотреб, но шанс есть.",
     items: [
-      ["P250 | Sand Dune", "C", 6, "Field-Tested"],
-      ["Nova | Predator", "C", 8, "Field-Tested"],
-      ["MP9 | Storm", "C", 10, "Field-Tested"],
-      ["Glock-18 | Candy Apple", "U", 25, "Factory New"],
-      ["MAC-10 | Heat", "U", 30, "Field-Tested"],
-      ["UMP-45 | Carbon Fiber", "U", 22, "Factory New"],
-      ["FAMAS | Djinn", "R", 90, "Minimal Wear"],
-      ["Desert Eagle | Oxide Blaze", "R", 140, "Factory New"],
-      ["AK-47 | Redline", "M", 900, "Field-Tested"],
-      ["AWP | Atheris", "M", 450, "Minimal Wear"],
-      ["M4A1-S | Cyrex", "L", 2500, "Factory New"],
-      ["AWP | Asiimov", "A", 6000, "Field-Tested"],
+      ["P250 | Sand Dune", "COMMON", 4],
+      ["MAG-7 | Storm", "COMMON", 5],
+      ["Nova | Predator", "COMMON", 6],
+      ["SG 553 | Waves Perforated", "COMMON", 5],
+      ["Glock-18 | Night", "UNCOMMON", 18],
+      ["MP7 | Armor Core", "UNCOMMON", 15],
+      ["Five-SeveN | Forest Night", "UNCOMMON", 14],
+      ["USP-S | Torque", "RARE", 45],
+      ["M4A4 | Evil Daimyo", "RARE", 70],
+      ["P90 | Asiimov", "MYTHICAL", 260],
+      ["AK-47 | Slate", "MYTHICAL", 290],
+      ["AWP | Atheris", "LEGENDARY", 380],
     ],
   },
   {
-    name: "Снайперский кейс",
+    name: "Калашников",
+    slug: "kalashnikov",
+    price: 299,
+    description: "Только AK-47. От пыли до Fire Serpent.",
+    items: [
+      ["AK-47 | Safari Mesh", "COMMON", 25],
+      ["AK-47 | Elite Build", "UNCOMMON", 60],
+      ["AK-47 | Uncharted", "UNCOMMON", 45],
+      ["AK-47 | Ice Coaled", "RARE", 210],
+      ["AK-47 | Slate", "RARE", 290],
+      ["AK-47 | Phantom Disruptor", "RARE", 180],
+      ["AK-47 | Redline", "LEGENDARY", 1650],
+      ["AK-47 | Neon Rider", "LEGENDARY", 2400],
+      ["AK-47 | Bloodsport", "ANCIENT", 4200],
+      ["AK-47 | Asiimov", "ANCIENT", 3900],
+      ["AK-47 | Vulcan", "ANCIENT", 9500],
+      ["AK-47 | Fire Serpent", "ANCIENT", 52000],
+    ],
+  },
+  {
+    name: "Снайпер",
     slug: "sniper",
-    description: "Винтовки для дальних дистанций",
+    price: 499,
+    description: "AWP и SSG 08. Медленно, но метко.",
     items: [
-      ["SSG 08 | Blue Spruce", "C", 7, "Field-Tested"],
-      ["SCAR-20 | Contractor", "C", 9, "Field-Tested"],
-      ["G3SG1 | Desert Storm", "C", 12, "Field-Tested"],
-      ["SSG 08 | Slashed", "U", 28, "Factory New"],
-      ["SCAR-20 | Cyrex", "U", 35, "Minimal Wear"],
-      ["G3SG1 | Demeter", "U", 32, "Factory New"],
-      ["AWP | Worm God", "R", 110, "Factory New"],
-      ["AWP | Pit Viper", "R", 150, "Minimal Wear"],
-      ["AWP | Redline", "M", 700, "Field-Tested"],
-      ["AWP | Hyper Beast", "M", 1300, "Minimal Wear", true],
-      ["AWP | Neo-Noir", "L", 3200, "Factory New"],
-      ["AWP | Dragon Lore", "A", 45000, "Field-Tested"],
+      ["SSG 08 | Abyss", "UNCOMMON", 40],
+      ["SSG 08 | Acid Fade", "RARE", 95],
+      ["AWP | Pit Viper", "UNCOMMON", 60],
+      ["AWP | Capillary", "RARE", 120],
+      ["AWP | Atheris", "MYTHICAL", 380],
+      ["AWP | Fever Dream", "MYTHICAL", 620],
+      ["SSG 08 | Dragonfire", "LEGENDARY", 1900],
+      ["AWP | Hyper Beast", "ANCIENT", 2300],
+      ["AWP | Neo-Noir", "ANCIENT", 2600],
+      ["AWP | Asiimov", "ANCIENT", 6800],
+      ["AWP | Lightning Strike", "ANCIENT", 11000],
+      ["AWP | Dragon Lore", "ANCIENT", 650000],
     ],
   },
   {
-    name: "Штурмовые винтовки",
-    slug: "rifles",
-    description: "AK-47, M4 и компания",
+    name: "Пистолетный раунд",
+    slug: "pistol-round",
+    price: 149,
+    description: "Глоки, юспы, диглы. Первый раунд решает.",
     items: [
-      ["Galil AR | Sage Spirit", "C", 8, "Field-Tested"],
-      ["FAMAS | Sergeant", "C", 10, "Field-Tested"],
-      ["SG 553 | Damascus Steel", "C", 12, "Minimal Wear"],
-      ["M4A4 | Desert-Strike", "U", 35, "Field-Tested"],
-      ["AK-47 | Blue Laminate", "U", 40, "Field-Tested"],
-      ["AUG | Bengal Tiger", "U", 30, "Minimal Wear"],
-      ["M4A4 | Buzz Kill", "R", 220, "Factory New"],
-      ["AK-47 | Point Disarray", "R", 160, "Minimal Wear"],
-      ["AK-47 | Asiimov", "M", 1100, "Field-Tested", true],
-      ["M4A4 | Neo-Noir", "M", 700, "Minimal Wear"],
-      ["AK-47 | Vulcan", "L", 2800, "Factory New"],
-      ["M4A4 | Howl", "A", 20000, "Minimal Wear"],
+      ["Glock-18 | Sand Dune", "COMMON", 4],
+      ["P2000 | Granite Marbleized", "COMMON", 6],
+      ["Tec-9 | Isaac", "UNCOMMON", 20],
+      ["CZ75-Auto | Victoria", "RARE", 140],
+      ["P250 | Asiimov", "RARE", 160],
+      ["Glock-18 | Water Elemental", "MYTHICAL", 340],
+      ["USP-S | Cortex", "MYTHICAL", 290],
+      ["Desert Eagle | Code Red", "LEGENDARY", 1450],
+      ["USP-S | Kill Confirmed", "ANCIENT", 3900],
+      ["Glock-18 | Fade", "ANCIENT", 95000],
+      ["Desert Eagle | Blaze", "LEGENDARY", 48000],
     ],
   },
   {
-    name: "Пистолетный кейс",
-    slug: "pistols",
-    description: "Всё для любителей пистолетов",
+    name: "Ва-банк",
+    slug: "all-in",
+    price: 1499,
+    description: "Дорогой кейс для тех, кому не жалко.",
     items: [
-      ["Tec-9 | Sandstorm", "C", 5, "Field-Tested"],
-      ["Five-SeveN | Forest Night", "C", 6, "Field-Tested"],
-      ["P2000 | Granite Marbleized", "C", 9, "Factory New"],
-      ["USP-S | Guardian", "U", 45, "Minimal Wear"],
-      ["Glock-18 | Steel Disruption", "U", 30, "Factory New"],
-      ["CZ75-Auto | Tigris", "U", 28, "Factory New"],
-      ["Desert Eagle | Code Red", "R", 200, "Minimal Wear"],
-      ["P250 | Asiimov", "R", 150, "Field-Tested"],
-      ["USP-S | Kill Confirmed", "M", 1600, "Minimal Wear", true],
-      ["Desert Eagle | Printstream", "M", 900, "Factory New"],
-      ["Glock-18 | Fade", "L", 3500, "Factory New"],
-      ["Desert Eagle | Blaze", "A", 15000, "Factory New"],
-    ],
-  },
-  {
-    name: "Ножи и перчатки",
-    slug: "knives",
-    description: "Премиум-кейс с ножами",
-    items: [
-      ["Navaja Knife | Safari Mesh", "C", 600, "Field-Tested"],
-      ["Stiletto Knife | Boreal Forest", "C", 800, "Field-Tested"],
-      ["Ursus Knife | Scorched", "C", 900, "Field-Tested"],
-      ["Bayonet | Forest DDPAT", "U", 1500, "Field-Tested"],
-      ["Flip Knife | Urban Masked", "U", 1400, "Field-Tested"],
-      ["Gut Knife | Night", "U", 1300, "Field-Tested"],
-      ["Falchion Knife | Slaughter", "R", 2500, "Factory New"],
-      ["Huntsman Knife | Fade", "R", 4000, "Factory New"],
-      ["M9 Bayonet | Tiger Tooth", "M", 9000, "Factory New"],
-      ["Butterfly Knife | Doppler", "M", 12000, "Factory New"],
-      ["Karambit | Fade", "L", 30000, "Factory New"],
-      ["Sport Gloves | Pandora's Box", "A", 60000, "Field-Tested"],
+      ["M4A1-S | Nightmare", "MYTHICAL", 420],
+      ["M4A4 | Desolate Space", "MYTHICAL", 560],
+      ["AK-47 | Redline", "LEGENDARY", 1650],
+      ["M4A1-S | Hyper Beast", "ANCIENT", 1900],
+      ["M4A4 | Neo-Noir", "ANCIENT", 2100],
+      ["AK-47 | Neon Rider", "LEGENDARY", 2400],
+      ["AWP | Asiimov", "ANCIENT", 6800],
+      ["M4A4 | Howl", "ANCIENT", 420000],
+      ["AK-47 | Fire Serpent", "ANCIENT", 52000],
+      ["AWP | Lightning Strike", "ANCIENT", 11000],
     ],
   },
 ];
 
-const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
-// Шансы: вес редкости делится поровну между предметами этой редкости,
-// сумма по кейсу всегда ровно 100
-function chances(rows: Row[]): number[] {
-  const counts: Record<string, number> = {};
-  for (const r of rows) counts[r[1]] = (counts[r[1]] ?? 0) + 1;
-  const total = Object.keys(counts).reduce((s, k) => s + WEIGHT[k as Code], 0);
-  const res = rows.map((r) => round3(((WEIGHT[r[1]] / total) * 100) / counts[r[1]]));
-  const diff = round3(100 - res.reduce((a, b) => a + b, 0));
-  res[res.length - 1] = round3(res[res.length - 1] + diff);
-  return res;
+function chances(items: Seed[]) {
+  const total = items.reduce((s, [, r]) => s + (WEIGHT[r] ?? 1), 0);
+  const raw = items.map(([, r]) => Math.round(((WEIGHT[r] ?? 1) / total) * 100 * 100) / 100);
+  // добиваем погрешность округления в первый (самый частый) предмет
+  const diff = Math.round((100 - raw.reduce((a, b) => a + b, 0)) * 100) / 100;
+  raw[0] = Math.round((raw[0] + diff) * 100) / 100;
+  return raw;
 }
 
 async function main() {
-  // Чистим каталог (пользователи остаются)
-  await prisma.opening.deleteMany();
-  await prisma.inventoryItem.deleteMany();
-  await prisma.caseItem.deleteMany();
-  await prisma.item.deleteMany();
-  await prisma.case.deleteMany();
-
-  await prisma.user.upsert({
-    where: { steamId: ADMIN_STEAM_ID },
-    update: { role: "ADMIN", balance: 999999 },
-    create: { steamId: ADMIN_STEAM_ID, username: "Admin", role: "ADMIN", balance: 999999 },
-  });
-
-  await prisma.siteSetting.upsert({
-    where: { key: "margin" },
-    update: { value: String(MARGIN) },
-    create: { key: "margin", value: String(MARGIN) },
-  });
-  await prisma.siteSetting.upsert({
-    where: { key: "sellCommission" },
-    update: { value: String(SELL_COMMISSION) },
-    create: { key: "sellCommission", value: String(SELL_COMMISSION) },
-  });
-
-  for (const c of CASES) {
-    const ch = chances(c.items);
-    const caseRow = await prisma.case.create({
-      data: { name: c.name, slug: c.slug, description: c.description, image: "", price: 0 },
-    });
-
-    let ev = 0;
-    for (let i = 0; i < c.items.length; i++) {
-      const [name, code, price, wear, statTrak] = c.items[i];
-      const item = await prisma.item.create({
-        data: { name, rarity: R[code], price, wear, statTrak: !!statTrak, image: "" },
-      });
-      await prisma.caseItem.create({
-        data: { caseId: caseRow.id, itemId: item.id, dropChance: ch[i] },
-      });
-      ev += (price * ch[i]) / 100;
+  // 1. Каталог (нужен для картинок и рыночных цен). Без интернета — пропускаем.
+  const catalogCount = await prisma.skinCatalog.count();
+  if (catalogCount === 0) {
+    try {
+      await importCatalog(prisma);
+    } catch (e) {
+      console.warn("! Каталог не загрузился, кейсы будут без картинок:", (e as Error).message);
     }
-
-    // Цена кейса = сумма(price * dropChance / 100) * margin
-    const casePrice = Math.round(ev * MARGIN);
-    await prisma.case.update({ where: { id: caseRow.id }, data: { price: casePrice } });
-
-    const sum = round3(ch.reduce((a, b) => a + b, 0));
-    console.log(`${c.name}: цена ${casePrice} ₽, сумма шансов ${sum}%`);
   }
 
-  console.log("Seed готов");
+  // 2. Настройки
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    await prisma.siteSetting.upsert({ where: { key }, update: {}, create: { key, value } });
+  }
+
+  // 3. Админ (подставь свой SteamID64 в .env → ADMIN_STEAM_IDS)
+  await prisma.user.upsert({
+    where: { steamId: "76561198000000000" },
+    update: { role: "ADMIN" },
+    create: {
+      steamId: "76561198000000000",
+      username: "Админ",
+      balance: 999999,
+      role: "ADMIN",
+    },
+  });
+
+  // 4. Предметы и кейсы
+  const itemIds = new Map<string, string>();
+  for (const c of CASES) {
+    for (const [name, rarity, price] of c.items) {
+      if (itemIds.has(name)) continue;
+      const cat = await prisma.skinCatalog.findFirst({ where: { name } });
+      const existing = await prisma.item.findFirst({ where: { name } });
+      const data = {
+        name,
+        rarity: cat?.rarity ?? rarity,
+        price,
+        image: cat?.image ?? null,
+        wear: cat?.wear ?? "Field-Tested",
+        marketHashName: cat?.marketHashName ?? null,
+      };
+      const item = existing
+        ? await prisma.item.update({ where: { id: existing.id }, data })
+        : await prisma.item.create({ data });
+      itemIds.set(name, item.id);
+    }
+
+    const ch = chances(c.items);
+    const kase = await prisma.case.upsert({
+      where: { slug: c.slug },
+      update: {},
+      create: {
+        name: c.name,
+        slug: c.slug,
+        price: c.price,
+        description: c.description,
+        sortOrder: CASES.indexOf(c),
+        image: (await prisma.item.findUnique({ where: { id: itemIds.get(c.items[c.items.length - 1][0])! } }))?.image ?? null,
+      },
+    });
+    for (let i = 0; i < c.items.length; i++) {
+      const itemId = itemIds.get(c.items[i][0])!;
+      await prisma.caseItem.upsert({
+        where: { caseId_itemId: { caseId: kase.id, itemId } },
+        update: {},
+        create: { caseId: kase.id, itemId, dropChance: ch[i] },
+      });
+    }
+    console.log(`Кейс «${c.name}»: ${c.items.length} предметов`);
+  }
+  console.log("Готово.");
 }
 
 main()

@@ -1,45 +1,29 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
-
-const TABS = [
-  { href: "/admin", label: "Обзор" },
+const NAV = [
+  { href: "/admin", label: "Сводка" },
   { href: "/admin/cases", label: "Кейсы" },
   { href: "/admin/items", label: "Предметы" },
-  { href: "/admin/users", label: "Пользователи" },
+  { href: "/admin/users", label: "Игроки" },
   { href: "/admin/settings", label: "Настройки" },
 ];
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  // Вход только для админов. Действия внутри страниц проверяют роль отдельно
-  const user = await getCurrentUser();
-  if (!user || user.isBanned || user.role !== "ADMIN") {
-    redirect("/");
-  }
-
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  await requireAdmin();
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight">Админка</h1>
-        <nav className="mt-3 flex gap-1 overflow-x-auto">
-          {TABS.map((t) => (
-            <Link
-              key={t.href}
-              href={t.href}
-              className="whitespace-nowrap rounded-md border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground transition hover:border-violet-500/60 hover:text-foreground"
-            >
-              {t.label}
+    <div className="grid gap-6 md:grid-cols-[180px_1fr]">
+      <aside>
+        <div className="mb-3 font-display text-lg">Админка</div>
+        <nav className="flex gap-1 overflow-x-auto md:flex-col">
+          {NAV.map((n) => (
+            <Link key={n.href} href={n.href} className="whitespace-nowrap rounded px-3 py-2 text-sm text-dust hover:bg-panel hover:text-bone">
+              {n.label}
             </Link>
           ))}
         </nav>
-      </div>
-      {children}
+      </aside>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

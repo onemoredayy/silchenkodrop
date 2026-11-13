@@ -1,32 +1,29 @@
-import { getToken } from "next-auth/jwt"
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
-export default async function middleware(req: NextRequest) {
-  const isAdminRoute = req.nextUrl.pathname.startsWith("/admin")
-
-  if (isAdminRoute) {
-    const token = await getToken({
-      req,
-      secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
-    })
-
-    console.log("MIDDLEWARE DEBUG token:", JSON.stringify(token))
-
-    if (!token) {
-      const loginUrl = new URL("/", req.nextUrl.origin)
-      return NextResponse.redirect(loginUrl)
+// Закрытые разделы. Роль ADMIN дополнительно проверяется в app/admin/layout.tsx
+// и в каждом серверном действии админки.
+export async function middleware(req: NextRequest) {
+  const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (!session) {
+    if (req.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Нужно войти через Steam" }, { status: 401 });
     }
-
-    if (token.role !== "ADMIN") {
-      const homeUrl = new URL("/", req.nextUrl.origin)
-      return NextResponse.redirect(homeUrl)
-    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
   }
-
-  return NextResponse.next()
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
-}
+  matcher: [
+    "/admin/:path*",
+    "/inventory/:path*",
+    "/balance/:path*",
+    "/profile/:path*",
+    "/api/cases/:path*",
+    "/api/inventory/:path*",
+  ],
+};
