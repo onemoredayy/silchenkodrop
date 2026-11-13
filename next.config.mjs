@@ -5,6 +5,8 @@ const extraOrigins = (process.env.ALLOWED_ORIGINS || "")
   .filter(Boolean);
 
 const nextConfig = {
+  // сборка на сервере идёт в отдельную папку и подменяет рабочую только после успеха (scripts/deploy.sh)
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   eslint: { ignoreDuringBuilds: true },
   experimental: {
     instrumentationHook: true, // автообновление цен (instrumentation.ts)

@@ -79,7 +79,13 @@ FIRST=0; [ -f prisma/dev.db ] || FIRST=1
 npm ci --no-audit --no-fund --loglevel=error
 npx prisma db push --skip-generate >/dev/null
 [ "$FIRST" = 1 ] && npm run db:seed
-npm run build
+# Собираем в .next-new: если сборка упадёт, работающий сайт не сломается
+rm -rf .next-new
+NEXT_DIST_DIR=.next-new npx prisma generate >/dev/null
+if ! NEXT_DIST_DIR=.next-new npx next build; then
+  echo "Сборка не удалась — сайт остался на прошлой версии."
+  exit 1
+fi
 
 cat > /etc/systemd/system/silchenkodrop.service <<EOF
 [Unit]
@@ -97,7 +103,9 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable -q silchenkodrop
-systemctl restart silchenkodrop
+systemctl stop silchenkodrop || true
+rm -rf .next && mv .next-new .next
+systemctl start silchenkodrop
 
 say "7/7 HTTPS через Caddy"
 cat > /etc/caddy/Caddyfile <<EOF
