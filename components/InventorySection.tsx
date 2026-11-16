@@ -7,7 +7,7 @@ import ItemCard from "@/components/ItemCard";
 import SellButton from "@/components/SellButton";
 import Pager from "@/components/Pager";
 
-const PER_PAGE = 20; // 4 ряда по 5 карточек
+const PER_PAGE = 24; // 4 ряда по 6 карточек (на телефоне 8 по 3)
 
 // Инвентарь игрока — блок на странице профиля (/profile?tab=sold&page=2#inventory)
 export default async function InventorySection({ userId, searchParams }: { userId: string; searchParams: { tab?: string; page?: string } }) {
@@ -74,7 +74,7 @@ export default async function InventorySection({ userId, searchParams }: { userI
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
           {rows.map((r) => (
             <ItemCard
               key={r.id}

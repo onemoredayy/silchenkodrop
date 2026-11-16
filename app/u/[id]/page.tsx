@@ -86,7 +86,7 @@ export default async function PublicProfile({ params }: { params: { id: string }
           <h2 className="h2 mb-3">
             Инвентарь <span className="text-base text-dust">· {invSorted.length} шт.</span>
           </h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
             {invSorted.slice(0, 10).map((r) => (
               <ItemCard key={r.id} name={r.item.name} rarity={r.item.rarity} image={r.item.image} wear={r.item.wear} price={r.price} />
             ))}

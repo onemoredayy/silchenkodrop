@@ -30,23 +30,23 @@ export default function ItemCard({ name, rarity, image, price, wear, chance, foo
         selected ? "border-stencil" : onClick ? "border-line hover:border-dust" : "border-line"
       } ${onClick ? "cursor-pointer select-none" : ""}`}
     >
-      <div className="relative aspect-[4/3] bg-raised/50 p-2 sm:p-3">
+      <div className="relative aspect-[4/3] bg-raised/50 p-1.5 sm:p-2">
         <SkinImage src={image} name={name} className="h-full w-full" />
         {chance != null && (
-          <span className="absolute right-1.5 top-1.5 text-[11px] text-dust sm:right-2 sm:top-2 sm:text-xs">{chance.toFixed(chance < 1 ? 2 : 1)}%</span>
+          <span className="absolute right-1.5 top-1.5 text-[10px] text-dust sm:right-2 sm:top-2 sm:text-[11px]">{chance.toFixed(chance < 1 ? 2 : 1)}%</span>
         )}
       </div>
       <div className="h-[3px]" style={{ background: color }} />
-      <div className="flex flex-1 flex-col gap-0.5 p-2 sm:p-3">
-        <div className="truncate text-xs text-dust">{weapon}</div>
-        <div className="truncate text-[13px] font-medium sm:text-sm" title={name}>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-1.5 sm:p-2">
+        <div className="truncate text-[10px] text-dust sm:text-[11px]">{weapon}</div>
+        <div className="truncate text-[11px] font-medium sm:text-xs" title={name}>
           {skin ?? weapon}
         </div>
-        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 text-[13px] sm:text-sm">
+        <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-1.5 text-[11px] sm:text-xs">
           {price != null && <span>{money(price)}</span>}
-          {wear && <span className="truncate text-xs text-dust">{wearRu(wear)}</span>}
+          {wear && <span className="truncate text-[10px] text-dust">{wearRu(wear)}</span>}
         </div>
-        {footer && <div className="mt-2">{footer}</div>}
+        {footer && <div className="mt-1.5">{footer}</div>}
       </div>
     </div>
   );

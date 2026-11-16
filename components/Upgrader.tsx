@@ -232,7 +232,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
           <p className="text-sm text-dust">Инвентарь пуст. Открой кейс, и сюда будет что поставить.</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
+            <div className="grid grid-cols-3 gap-1.5">
               {invShown.map((i) => (
                 <ItemCard
                   key={i.id}
@@ -405,7 +405,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
             <option value="1">StatTrak</option>
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
+        <div className="grid grid-cols-3 gap-1.5">
           {targets.map((t) => (
             <ItemCard
               key={t.marketHashName}

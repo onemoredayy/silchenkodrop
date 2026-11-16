@@ -89,9 +89,22 @@ export async function battleView(id: string) {
   const caseIds = parseCaseIds(b.caseIds);
   const cases = await prisma.case.findMany({
     where: { id: { in: [...new Set(caseIds)] } },
-    select: { id: true, name: true, image: true, price: true, slug: true },
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      price: true,
+      slug: true,
+      // предметы кейса — только для красоты ленты при показе раунда
+      items: { take: 40, select: { dropChance: true, item: { select: { name: true, rarity: true, image: true } } } },
+    },
   });
-  const byId = new Map(cases.map((c) => [c.id, c]));
+  const byId = new Map(
+    cases.map(({ items, ...c }) => [
+      c.id,
+      { ...c, pool: items.map((ci) => ({ ...ci.item, chance: ci.dropChance })) },
+    ]),
+  );
   return {
     id: b.id,
     status: b.status,
@@ -101,7 +114,7 @@ export async function battleView(id: string) {
     winnerId: b.winnerId,
     createdAt: b.createdAt.toISOString(),
     finishedAt: b.finishedAt?.toISOString() ?? null,
-    rounds: caseIds.map((cid) => byId.get(cid) ?? { id: cid, name: "Кейс удалён", image: null, price: 0, slug: "" }),
+    rounds: caseIds.map((cid) => byId.get(cid) ?? { id: cid, name: "Кейс удалён", image: null, price: 0, slug: "", pool: [] }),
     players: b.players.map((p) => ({
       userId: p.userId,
       slot: p.slot,

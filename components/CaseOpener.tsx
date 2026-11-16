@@ -7,6 +7,7 @@ import { money } from "@/lib/format";
 import SkinImage from "./SkinImage";
 import ItemCard from "./ItemCard";
 import { playFart } from "@/lib/fart";
+import { playBaraban, primeBaraban, stopBaraban } from "@/lib/baraban";
 import { jackpot, lose, readX, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
 import Fireworks from "./Fireworks";
 
@@ -27,6 +28,7 @@ const GAP = 6;
 const LENGTH = 64;
 const WIN_INDEX = 56;
 const SPIN_MS = 6500;
+const TOP_SPIN_MS = 9000; // топ-дроп крутится дольше, под барабан
 const TROLL_PAUSE_MS = 1200; // сколько лента стоит на топе перед пуком
 const TROLL_MOVE_MS = 1100;
 
@@ -127,19 +129,20 @@ function Reel({
     setLive(true);
     setStrip(buildStrip(items, drop.item, decoy));
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const ms = topRef.current && !decoy ? TOP_SPIN_MS : SPIN_MS;
 
     let stopTicks = () => {};
     // ждём, пока лента перерисуется в начальной позиции, затем крутим
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
-        setDuration(SPIN_MS);
+        setDuration(ms);
         setAnimate(true);
         const jitter = (Math.random() - 0.5) * (decoy ? 0.3 : 0.7);
         target.current = { index: WIN_INDEX, jitter };
         setOffset(centerOn(WIN_INDEX, jitter));
         // щелчок на каждой карточке, проходящей под стрелкой
         if (tickRef.current && stripRef.current) {
-          stopTicks = tickWhileMoving(stripRef.current, readX, step, SPIN_MS + (decoy ? TROLL_PAUSE_MS + TROLL_MOVE_MS : 0) + 100);
+          stopTicks = tickWhileMoving(stripRef.current, readX, step, ms + (decoy ? TROLL_PAUSE_MS + TROLL_MOVE_MS : 0) + 100);
         }
       });
     });
@@ -148,7 +151,7 @@ function Reel({
       setTimeout(() => {
         setLive(false);
         setLanded({ index: WIN_INDEX, top: decoy ? true : topRef.current });
-      }, SPIN_MS),
+      }, ms),
     );
     if (decoy) {
       // Пук-прокрутка: замерли на сияющем топе… пук… доезжаем до настоящего предмета
@@ -187,13 +190,12 @@ function Reel({
     >
       <div
         ref={stripRef}
-        className={`flex h-full items-center ${live ? "reel-spin" : ""}`}
+        className="flex h-full items-center"
         style={{
-          ["--spin-ms" as string]: `${SPIN_MS}ms`,
           gap: GAP,
           transform: `translateX(${offset}px)`,
           transition: animate
-            ? `transform ${duration}ms ${duration === SPIN_MS ? "cubic-bezier(0.08, 0.6, 0.12, 1)" : "cubic-bezier(0.5, 0, 0.3, 1)"}`
+            ? `transform ${duration}ms ${duration >= SPIN_MS ? "cubic-bezier(0.08, 0.6, 0.12, 1)" : "cubic-bezier(0.5, 0, 0.3, 1)"}`
             : "none",
         }}
       >
@@ -268,7 +270,13 @@ export default function CaseOpener({
   // топ-дроп: самый дорогой предмет кейса или в 10+ раз дороже кейса (подстава пук-прокрутки — не топ)
   const isTop = (d: Drop) => !d.troll && d.item.price > 0 && (d.item.price >= maxPrice * 0.999 || d.item.price >= price * 10);
 
-  useEffect(() => () => clearTimeout(finishTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(finishTimer.current);
+      stopBaraban();
+    },
+    [],
+  );
 
   const cost = Math.round(price * count * 100) / 100;
   const busy = state === "spinning";
@@ -282,6 +290,7 @@ export default function CaseOpener({
 
   async function open() {
     unlockAudio();
+    if (soundRef.current) primeBaraban(); // разрешаем браузеру сыграть барабан позже, после ответа сервера
     setError(null);
     setSoldIds([]);
     setSoldTotal(0);
@@ -305,6 +314,7 @@ export default function CaseOpener({
     setReels(got.length);
 
     const finish = () => {
+      stopBaraban();
       setState("done");
       const best = got.filter(isTop).sort((a, b) => b.item.price - a.item.price)[0];
       if (best) {
@@ -324,9 +334,11 @@ export default function CaseOpener({
     farted.current = false;
     setRun((r) => r + 1);
     const anyTroll = got.some((d) => d.troll);
+    const anyTop = got.some(isTop);
+    if (anyTop && soundRef.current) playBaraban();
     finishTimer.current = setTimeout(
       finish,
-      anyTroll ? SPIN_MS + TROLL_PAUSE_MS + TROLL_MOVE_MS + 150 : SPIN_MS + 150,
+      Math.max(anyTroll ? SPIN_MS + TROLL_PAUSE_MS + TROLL_MOVE_MS : 0, anyTop ? TOP_SPIN_MS : SPIN_MS) + 150,
     );
   }
 
@@ -444,7 +456,7 @@ export default function CaseOpener({
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
             {drops.map((d) => {
               const isSold = soldIds.includes(d.inventoryId);
               return (
@@ -462,9 +474,9 @@ export default function CaseOpener({
                       <button
                         onClick={() => sell([d.inventoryId])}
                         disabled={selling}
-                        className="btn-ghost h-8 w-full px-2 text-xs"
+                        className="btn-ghost h-8 w-full px-1 text-[11px]"
                       >
-                        Продать за {money(sellFor(d))}
+                        Продать
                       </button>
                     )
                   }

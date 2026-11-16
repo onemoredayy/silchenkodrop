@@ -97,7 +97,7 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
           <p className="text-sm text-dust">Инвентарь пуст. Открой пару кейсов, и сюда будет что положить.</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-1.5 min-[400px]:grid-cols-4 sm:grid-cols-5">
               {shown.map((i) => (
                 <ItemCard
                   key={i.id}

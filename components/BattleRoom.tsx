@@ -7,10 +7,91 @@ import { money } from "@/lib/format";
 import { rarityColor } from "@/lib/rarity";
 import Avatar from "./Avatar";
 import SkinImage from "./SkinImage";
+import Fireworks from "./Fireworks";
+import { tickWhileMoving, unlockAudio, win } from "@/lib/sfx";
 
 const POLL_MS = 2000;
-const ROUND_MS = 2200; // сколько длится один раунд при показе
-const SPIN_MS = 1400; // из них — «крутится»
+const ROUND_MS = 4300; // сколько длится один раунд при показе
+const SPIN_MS = 3200; // из них — крутится лента
+const REEL_LEN = 32;
+const REEL_WIN = 27;
+const ROW = 72; // высота карточки в вертикальной ленте
+
+type Mini = { name: string; rarity: string; image: string | null };
+const readY = (m: DOMMatrix) => -m.m42;
+
+// Вертикальная лента игрока в раунде: крутится при появлении и встаёт на его дроп
+function BattleReel({ pool, drop, top, ticking }: { pool: (Mini & { chance: number })[]; drop: Mini; top: boolean; ticking: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [y, setY] = useState(0);
+  const [landed, setLanded] = useState(false);
+  const [strip] = useState<Mini[]>(() => {
+    const total = pool.reduce((a, p) => a + p.chance, 0) || 1;
+    const pick = () => {
+      let r = Math.random() * total;
+      for (const p of pool) if ((r -= p.chance) <= 0) return p;
+      return pool[0] ?? drop;
+    };
+    return Array.from({ length: REEL_LEN }, (_, i) => (i === REEL_WIN ? drop : pick()));
+  });
+
+  useEffect(() => {
+    const h = box.current?.clientHeight ?? 128;
+    let stop = () => {};
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        const jitter = (Math.random() - 0.5) * ROW * 0.6;
+        setY(-(REEL_WIN * ROW + ROW / 2 - h / 2 + jitter));
+        if (ticking && ref.current) stop = tickWhileMoving(ref.current, readY, ROW, SPIN_MS + 50);
+      });
+    });
+    const t = setTimeout(() => setLanded(true), SPIN_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+      stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={box}
+      className={`relative h-36 overflow-hidden ${landed && top ? "reel-flash" : ""}`}
+      style={{
+        maskImage: "linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent)",
+        WebkitMaskImage: "linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent)",
+      }}
+    >
+      <div
+        ref={ref}
+        style={{ transform: `translateY(${y}px)`, transition: y ? `transform ${SPIN_MS}ms cubic-bezier(0.1, 0.65, 0.12, 1)` : "none" }}
+      >
+        {strip.map((it, i) => {
+          const win_ = landed && i === REEL_WIN;
+          return (
+            <div key={i} className="flex items-center justify-center px-2" style={{ height: ROW }}>
+              <div
+                className={`relative flex h-[62px] w-full max-w-[120px] items-center justify-center rounded border border-line bg-panel transition-opacity duration-300 ${
+                  win_ ? (top ? "reel-jackpot" : "reel-win") : landed ? "opacity-30" : ""
+                }`}
+                style={{
+                  boxShadow: win_ && !top ? `0 0 16px 2px ${rarityColor(it.rarity)}` : `inset 0 -3px 0 ${rarityColor(it.rarity)}`,
+                }}
+              >
+                <SkinImage src={it.image} name={it.name} className="h-12 w-16" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* указатели слева и справа */}
+      <div className="pointer-events-none absolute left-0 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[7px] border-l-[9px] border-y-transparent border-l-stencil" />
+      <div className="pointer-events-none absolute right-0 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[7px] border-r-[9px] border-y-transparent border-r-stencil" />
+    </div>
+  );
+}
 
 export default function BattleRoom({ initial, me }: { initial: BattleView; me: { id: string; balance: number; isAdmin: boolean } | null }) {
   const router = useRouter();
@@ -22,6 +103,8 @@ export default function BattleRoom({ initial, me }: { initial: BattleView; me: {
   const [shown, setShown] = useState(finishedLongAgo ? initial.rounds.length : 0);
   const [spinning, setSpinning] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [fire, setFire] = useState(0);
+  const animated = useRef(!finishedLongAgo); // салют только если батл досмотрели сейчас
 
   // ждём игроков: опрашиваем сервер
   useEffect(() => {
@@ -47,8 +130,22 @@ export default function BattleRoom({ initial, me }: { initial: BattleView; me: {
   }, [b.status, shown, b.rounds.length]);
 
   useEffect(() => {
-    if (b.status === "DONE" && shown >= b.rounds.length) router.refresh(); // обновить баланс в шапке
+    if (b.status === "DONE" && shown >= b.rounds.length) {
+      router.refresh(); // обновить баланс в шапке
+      if (animated.current) {
+        animated.current = false;
+        setFire((f) => f + 1);
+        win();
+      }
+    }
   }, [b.status, shown, b.rounds.length, router]);
+
+  // браузер разрешит щелчки ленты только после любого нажатия на странице
+  useEffect(() => {
+    const on = () => unlockAudio();
+    window.addEventListener("pointerdown", on, { once: true });
+    return () => window.removeEventListener("pointerdown", on);
+  }, []);
 
   const skip = () => {
     timers.current.forEach(clearTimeout);
@@ -85,6 +182,7 @@ export default function BattleRoom({ initial, me }: { initial: BattleView; me: {
 
   return (
     <div className="space-y-4">
+      <Fireworks fire={fire} ms={3500} />
       {/* раунды — кейсы по порядку */}
       <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:px-0">
         {b.rounds.map((c, i) => (
@@ -177,24 +275,23 @@ export default function BattleRoom({ initial, me }: { initial: BattleView; me: {
               </div>
 
               {/* текущий раунд */}
-              {done && !finished && (
-                <div
-                  className="flex h-32 flex-col items-center justify-center gap-1 p-2"
-                  style={!spinning && cur ? { boxShadow: `inset 0 -3px 0 ${rarityColor(cur.item.rarity)}` } : undefined}
-                >
-                  {spinning || !cur ? (
-                    <SkinImage
-                      src={b.rounds[current]?.image}
-                      name="крутится"
-                      className="h-16 w-20 animate-bounce opacity-70"
-                    />
-                  ) : (
-                    <>
-                      <SkinImage src={cur.item.image} name={cur.item.name} className="h-16 w-20" />
-                      <span className="w-full truncate text-center text-xs">{cur.item.name}</span>
-                      <span className="text-xs text-dust">{money(cur.price)}</span>
-                    </>
-                  )}
+              {done && !finished && cur && (
+                <div className="border-b border-line">
+                  <BattleReel
+                    key={current}
+                    pool={b.rounds[current]?.pool ?? []}
+                    drop={cur.item}
+                    top={cur.price >= (b.rounds[current]?.price ?? 0) * 10}
+                    ticking={i === 0}
+                  />
+                  <div className="h-10 px-2 py-1 text-center">
+                    {!spinning && (
+                      <>
+                        <div className="truncate text-xs">{cur.item.name}</div>
+                        <div className="text-xs text-dust">{money(cur.price)}</div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
               {isWinner && <div className="bg-stencil py-1 text-center text-xs font-semibold text-ground">ПОБЕДИТЕЛЬ</div>}
