@@ -42,6 +42,8 @@ export default async function CasePage({ params }: { params: { slug: string } })
         </div>
         <CaseOpener
           caseId={kase.id}
+          caseImage={kase.image}
+          caseName={kase.name}
           price={kase.price}
           items={items}
           loggedIn={!!user}

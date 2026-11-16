@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/ratelimit";
 import { round2 } from "@/lib/format";
 import { getSettings } from "@/lib/settings";
 import { randomInt } from "crypto";
+import { goldItemId } from "@/lib/gold";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
       if (charged.count === 0) throw new OpenError("Недостаточно средств на балансе", 402);
 
+      const goldId = await goldItemId(tx);
       const top = rows.reduce((a, b) => (itemPrice(b.item) > itemPrice(a.item) ? b : a));
       const drops = [];
       for (let i = 0; i < count; i++) {
@@ -64,9 +66,26 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         await tx.opening.create({
           data: { userId: user.id, caseId: kase.id, itemId: win.itemId, pricePaid: kase.price, itemPrice: price },
         });
-        const inv = await tx.inventoryItem.create({
-          data: { userId: user.id, itemId: win.itemId, dropPrice: price },
-        });
+        // Голда: вместо себя кладёт в инвентарь все скины этого кейса
+        const isGold = win.itemId === goldId;
+        const bonus = [];
+        if (isGold) {
+          for (const r of kase.items) {
+            if (r.itemId === goldId) continue;
+            const p = round2(itemPrice(r.item));
+            const b = await tx.inventoryItem.create({ data: { userId: user.id, itemId: r.itemId, dropPrice: p } });
+            bonus.push({
+              inventoryId: b.id,
+              item: { id: r.item.id, name: r.item.name, rarity: r.item.rarity, image: r.item.image, wear: r.item.wear, price: p },
+            });
+          }
+          bonus.sort((a, b) => b.item.price - a.item.price);
+        }
+        const inv = isGold
+          ? null
+          : await tx.inventoryItem.create({
+              data: { userId: user.id, itemId: win.itemId, dropPrice: price },
+            });
         await tx.transaction.create({
           data: {
             userId: user.id,
@@ -93,8 +112,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             : null;
 
         drops.push({
-          troll,
-          inventoryId: inv.id,
+          troll: isGold ? null : troll,
+          gold: isGold,
+          bonus,
+          inventoryId: inv?.id ?? "",
           item: {
             id: win.item.id,
             name: win.item.name,

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150">
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff6c2"/><stop offset=".45" stop-color="#ffd54a"/><stop offset="1" stop-color="#e0a21a"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2b92a"/><stop offset="1" stop-color="#a86b0c"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c98a14"/><stop offset="1" stop-color="#8a5508"/>
+    </linearGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffe27a" stop-opacity=".55"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+  </defs>
+  <ellipse cx="100" cy="80" rx="95" ry="65" fill="url(#glow)"/>
+  <polygon points="22,105 178,105 160,70 40,70" fill="url(#front)"/>
+  <polygon points="40,70 160,70 140,45 60,45" fill="url(#top)"/>
+  <polygon points="160,70 178,105 182,98 164,66" fill="url(#side)"/>
+  <polygon points="22,105 178,105 182,98 18,98" fill="#7a4a06" opacity=".35"/>
+  <text x="100" y="94" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="17" font-weight="900" fill="#7a4a06" opacity=".75">999.9</text>
+  <polygon points="66,50 98,50 92,58 62,58" fill="#fff" opacity=".55"/>
+  <g fill="#fff">
+    <path d="M150 30 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3z"/>
+    <path d="M40 34 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z" opacity=".8"/>
+  </g>
+</svg>

@@ -7,7 +7,7 @@ import { money } from "@/lib/format";
 import SkinImage from "./SkinImage";
 import ItemCard from "./ItemCard";
 import { playFart } from "@/lib/fart";
-import { playBaraban, primeBaraban, stopBaraban } from "@/lib/baraban";
+import { playBaraban, playGold, primeBaraban, stopBaraban } from "@/lib/baraban";
 import { jackpot, lose, readX, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
 import Fireworks from "./Fireworks";
 
@@ -21,7 +21,7 @@ type Item = {
   chance: number;
 };
 type Base = Omit<Item, "chance">;
-type Drop = { inventoryId: string; item: Base; troll: Base | null };
+type Drop = { inventoryId: string; item: Base; troll: Base | null; gold?: boolean; bonus?: { inventoryId: string; item: Base }[] };
 
 const MAX_COUNT = 5;
 const GAP = 6;
@@ -29,6 +29,9 @@ const LENGTH = 64;
 const WIN_INDEX = 56;
 const SPIN_MS = 6500;
 const TOP_SPIN_MS = 9000; // топ-дроп крутится дольше, под барабан
+const GOLD_SPIN_MS = 7000; // Голда: интро + лента ≈ длине её музыки (9,5 с)
+const INTRO_MS = 1100; // иконка кейса раскручивается и улетает перед лентой
+const GOLD_INTRO_MS = 2500;
 const TROLL_PAUSE_MS = 1200; // сколько лента стоит на топе перед пуком
 const TROLL_MOVE_MS = 1100;
 
@@ -61,6 +64,7 @@ function Reel({
   onFart,
   ticking,
   top,
+  gold,
 }: {
   items: Item[];
   drop: Drop | null;
@@ -69,6 +73,7 @@ function Reel({
   onFart: () => void;
   ticking: boolean; // щёлкает только одна лента, иначе при ×5 будет каша
   top: boolean; // выпал топ-дроп — карточка сияет
+  gold: boolean; // выпала Голда — лента сходит с ума
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const tickRef = useRef(ticking);
@@ -90,6 +95,8 @@ function Reel({
   fart.current = onFart;
   const topRef = useRef(top);
   topRef.current = top;
+  const goldRef = useRef(gold);
+  goldRef.current = gold;
   const [strip, setStrip] = useState<Item[]>(() =>
     // стартовая лента без случайности, чтобы сервер и браузер нарисовали одно и то же
     items.length ? Array.from({ length: 12 }, (_, i) => items[i % items.length]) : [],
@@ -129,7 +136,7 @@ function Reel({
     setLive(true);
     setStrip(buildStrip(items, drop.item, decoy));
     const timers: ReturnType<typeof setTimeout>[] = [];
-    const ms = topRef.current && !decoy ? TOP_SPIN_MS : SPIN_MS;
+    const ms = goldRef.current ? GOLD_SPIN_MS : topRef.current && !decoy ? TOP_SPIN_MS : SPIN_MS;
 
     let stopTicks = () => {};
     // ждём, пока лента перерисуется в начальной позиции, затем крутим
@@ -180,7 +187,7 @@ function Reel({
   return (
     <div
       ref={viewport}
-      className={`relative overflow-hidden border-b border-line bg-ground ${landed?.top ? "reel-flash" : ""}`}
+      className={`relative overflow-hidden border-b border-line bg-ground ${landed?.top ? "reel-flash" : ""} ${gold && (live || landed) ? "reel-gold" : ""}`}
       style={{
         height: cardH + 28,
         // края ленты плавно уходят в тень
@@ -202,7 +209,7 @@ function Reel({
         {strip.map((it, i) => (
           <div
             key={i}
-            className={`relative flex shrink-0 flex-col rounded border border-line bg-panel transition-opacity duration-300 ${
+            className={`relative flex shrink-0 flex-col rounded border border-line bg-panel transition-opacity duration-300 ${gold && live ? "reel-gold-card" : ""} ${
               landed?.index === i ? (landed.top ? "reel-jackpot" : "reel-win") : landed ? "opacity-40" : ""
             }`}
             style={{
@@ -231,6 +238,8 @@ function Reel({
 
 export default function CaseOpener({
   caseId,
+  caseImage,
+  caseName,
   price,
   items,
   loggedIn,
@@ -239,6 +248,8 @@ export default function CaseOpener({
   sellCommission,
 }: {
   caseId: string;
+  caseImage: string | null;
+  caseName: string;
   price: number;
   items: Item[];
   loggedIn: boolean;
@@ -265,7 +276,9 @@ export default function CaseOpener({
   const farted = useRef(false);
   const finishTimer = useRef<ReturnType<typeof setTimeout>>();
   const [fire, setFire] = useState(0); // номер салюта
-  const [banner, setBanner] = useState<Base | null>(null);
+  const [banner, setBanner] = useState<(Base & { gold?: number }) | null>(null);
+  // иконка кейса до ленты: idle — просто светится, normal/gold — раскручивается и улетает
+  const [intro, setIntro] = useState<"idle" | "normal" | "gold" | null>("idle");
   const maxPrice = Math.max(0, ...items.map((i) => i.price));
   // топ-дроп: самый дорогой предмет кейса или в 10+ раз дороже кейса (подстава пук-прокрутки — не топ)
   const isTop = (d: Drop) => !d.troll && d.item.price > 0 && (d.item.price >= maxPrice * 0.999 || d.item.price >= price * 10);
@@ -286,6 +299,7 @@ export default function CaseOpener({
     if (busy) return;
     setCount(n);
     setReels(n);
+    if (state !== "done") setIntro("idle");
   }
 
   async function open() {
@@ -295,7 +309,6 @@ export default function CaseOpener({
     setSoldIds([]);
     setSoldTotal(0);
     setState("spinning");
-    setReels(count); // ленты появляются заранее, до ответа сервера
     const res = await fetch(`/api/cases/${caseId}/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -311,7 +324,7 @@ export default function CaseOpener({
     const got = (data.drops as Drop[]).map((d) => (fast ? { ...d, troll: null } : d));
     setMoney(data.balance);
     setDrops(got);
-    setReels(got.length);
+    const anyGold = got.some((d) => d.gold);
 
     const finish = () => {
       stopBaraban();
@@ -319,8 +332,8 @@ export default function CaseOpener({
       const best = got.filter(isTop).sort((a, b) => b.item.price - a.item.price)[0];
       if (best) {
         setFire((f) => f + 1);
-        setBanner(best.item);
-        setTimeout(() => setBanner(null), 3300);
+        setBanner({ ...best.item, gold: best.gold ? best.bonus?.length ?? 0 : undefined });
+        setTimeout(() => setBanner(null), best.gold ? 4500 : 3300);
         if (soundRef.current) jackpot();
         return router.refresh();
       }
@@ -329,17 +342,37 @@ export default function CaseOpener({
       if (soundRef.current) (gotSum >= price * got.length ? win : lose)();
       router.refresh();
     };
-    if (fast) return finish();
+    if (fast) {
+      setIntro(null);
+      setReels(got.length);
+      return finish();
+    }
 
     farted.current = false;
-    setRun((r) => r + 1);
     const anyTroll = got.some((d) => d.troll);
     const anyTop = got.some(isTop);
-    if (anyTop && soundRef.current) playBaraban();
-    finishTimer.current = setTimeout(
-      finish,
-      Math.max(anyTroll ? SPIN_MS + TROLL_PAUSE_MS + TROLL_MOVE_MS : 0, anyTop ? TOP_SPIN_MS : SPIN_MS) + 150,
-    );
+    // 1) иконка кейса раскручивается и улетает (Голда — бешено, под свою музыку)
+    const introMs = anyGold ? GOLD_INTRO_MS : INTRO_MS;
+    setIntro(anyGold ? "gold" : "normal");
+    if (soundRef.current) {
+      if (anyGold) playGold();
+      else if (anyTop) playBaraban();
+    }
+    // 2) появляются ленты, на следующем кадре — крутятся
+    finishTimer.current = setTimeout(() => {
+      setIntro(null);
+      setReels(got.length);
+      finishTimer.current = setTimeout(() => {
+        setRun((r) => r + 1);
+        finishTimer.current = setTimeout(
+          finish,
+          Math.max(
+            anyTroll ? SPIN_MS + TROLL_PAUSE_MS + TROLL_MOVE_MS : 0,
+            anyGold ? GOLD_SPIN_MS : anyTop ? TOP_SPIN_MS : SPIN_MS,
+          ) + 150,
+        );
+      }, 40);
+    }, introMs);
   }
 
   // пук один на все ленты, даже если подставных несколько
@@ -368,10 +401,12 @@ export default function CaseOpener({
   }
 
   const sellFor = (d: Drop) => Math.round(d.item.price * (1 - sellCommission / 100) * 100) / 100;
-  const unsold = drops.filter((d) => !soldIds.includes(d.inventoryId));
+  // Голда раскладывается на все скины кейса — их и показываем в итогах
+  const results: Drop[] = drops.flatMap((d) => (d.gold && d.bonus ? d.bonus.map((b) => ({ ...b, troll: null })) : [d]));
+  const unsold = results.filter((d) => !soldIds.includes(d.inventoryId));
   const unsoldTotal = Math.round(unsold.reduce((s, d) => s + sellFor(d), 0) * 100) / 100;
-  const wonTotal = Math.round(drops.reduce((s, d) => s + d.item.price, 0) * 100) / 100;
-  const single = drops.length === 1 ? drops[0] : null;
+  const wonTotal = Math.round(results.reduce((s, d) => s + d.item.price, 0) * 100) / 100;
+  const single = results.length === 1 ? results[0] : null;
 
   return (
     <div className="panel overflow-hidden">
@@ -383,16 +418,35 @@ export default function CaseOpener({
               className="font-display text-5xl sm:text-7xl"
               style={{ color: "#ffe08a", textShadow: "0 0 18px #e0b43a, 0 0 40px #ff5fd2, 0 4px 0 #171a16" }}
             >
-              ТОП ДРОП!
+              {banner.gold != null ? "ГОЛДА!!!" : "ТОП ДРОП!"}
             </div>
             <div className="mt-2 inline-block rounded bg-ground/80 px-3 py-1 text-base sm:text-lg">
-              {banner.name} · <span className="text-stencil">{money(banner.price)}</span>
+              {banner.gold != null ? `Весь кейс твой: ${banner.gold} скинов` : banner.name} ·{" "}
+              <span className="text-stencil">{money(banner.price)}</span>
             </div>
           </div>
         </div>
       )}
+      {/* иконка кейса: светится, а при открытии раскручивается и улетает — потом ленты */}
+      {intro && (
+        <div
+          className={`relative grid h-56 place-items-center overflow-hidden border-b border-line bg-ground sm:h-64 ${intro === "gold" ? "case-hero-gold-bg" : ""}`}
+        >
+          <div
+            className="pointer-events-none absolute h-56 w-56 rounded-full opacity-50 blur-2xl"
+            style={{ background: intro === "gold" ? "#ffd54a" : "#e0b43a55" }}
+          />
+          <div
+            key={intro}
+            className={intro === "idle" ? "case-hero-idle" : intro === "gold" ? "case-hero-gold" : "case-hero-go"}
+            style={{ ["--intro-ms" as string]: `${intro === "gold" ? GOLD_INTRO_MS : INTRO_MS}ms` }}
+          >
+            <SkinImage src={caseImage} name={caseName} className="h-40 w-52 sm:h-48 sm:w-64" />
+          </div>
+        </div>
+      )}
       {/* ленты: по одной на каждый кейс */}
-      {Array.from({ length: reels }, (_, i) => (
+      {!intro && Array.from({ length: reels }, (_, i) => (
         <Reel
           key={i}
           items={items}
@@ -402,6 +456,7 @@ export default function CaseOpener({
           onFart={fartOnce}
           ticking={i === 0 && sound}
           top={!!drops[i] && isTop(drops[i])}
+          gold={!!drops[i]?.gold}
         />
       ))}
 
@@ -438,17 +493,18 @@ export default function CaseOpener({
       )}
 
       {/* результат: несколько кейсов */}
-      {state === "done" && drops.length > 1 && (
+      {state === "done" && results.length > 1 && (
         <div className="space-y-3 border-b border-line p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-dust">
-              Выпало {drops.length} шт. на <span className="text-bone">{money(wonTotal)}</span>
+              {drops.some((d) => d.gold) && <span className="mr-1 font-semibold text-stencil">ГОЛДА — весь кейс твой!</span>}
+              Выпало {results.length} шт. на <span className="text-bone">{money(wonTotal)}</span>
               {soldTotal > 0 && <span className="text-ok"> · продано на {money(soldTotal)}</span>}
             </div>
             <div className="flex flex-wrap gap-2">
               {unsold.length > 0 && (
                 <button onClick={() => sell(unsold.map((d) => d.inventoryId))} disabled={selling} className="btn-ghost">
-                  {unsold.length === drops.length ? "Продать всё" : "Продать остальное"} за {money(unsoldTotal)}
+                  {unsold.length === results.length ? "Продать всё" : "Продать остальное"} за {money(unsoldTotal)}
                 </button>
               )}
               <button onClick={() => setState("idle")} className="btn-ghost">
@@ -457,7 +513,7 @@ export default function CaseOpener({
             </div>
           </div>
           <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
-            {drops.map((d) => {
+            {results.map((d) => {
               const isSold = soldIds.includes(d.inventoryId);
               return (
                 <ItemCard

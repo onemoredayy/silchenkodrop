@@ -131,3 +131,49 @@ label {
   100% { transform: scale(1.1); opacity: 0; }
 }
 .jackpot-banner { animation: jackpot-banner 3.2s ease-out forwards; }
+
+/* Иконка кейса перед лентой */
+@keyframes case-idle {
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 10px rgba(224, 180, 58, 0.45)); }
+  50% { transform: translateY(-6px); filter: drop-shadow(0 0 26px rgba(224, 180, 58, 0.9)); }
+}
+.case-hero-idle { animation: case-idle 2.4s ease-in-out infinite; }
+/* раскручивается всё медленнее, уменьшается и гаснет */
+@keyframes case-go {
+  0% { transform: perspective(600px) rotateY(0) scale(1); filter: drop-shadow(0 0 30px #e0b43a) brightness(1.3); opacity: 1; }
+  70% { transform: perspective(600px) rotateY(900deg) scale(1.12); filter: drop-shadow(0 0 40px #ffe08a) brightness(1.6); opacity: 1; }
+  100% { transform: perspective(600px) rotateY(1080deg) scale(0.2); filter: drop-shadow(0 0 0 transparent) brightness(3); opacity: 0; }
+}
+.case-hero-go { animation: case-go var(--intro-ms, 1100ms) cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+/* Голда: бешено крутится, трясётся, переливается и взрывается */
+@keyframes case-gold {
+  0% { transform: rotate(0) scale(1); filter: hue-rotate(0) drop-shadow(0 0 20px #ffd54a) brightness(1.2); }
+  15% { transform: rotate(-20deg) scale(1.15) translate(-6px, 3px); }
+  30% { transform: rotate(540deg) scale(1.25) translate(5px, -4px); filter: hue-rotate(120deg) drop-shadow(0 0 40px #ff5fd2) brightness(1.6); }
+  55% { transform: rotate(1440deg) scale(1.4) translate(-5px, 5px); filter: hue-rotate(240deg) drop-shadow(0 0 50px #5fd2ff) brightness(1.9); }
+  80% { transform: rotate(2520deg) scale(1.6); filter: hue-rotate(360deg) drop-shadow(0 0 70px #ffd54a) brightness(2.4); opacity: 1; }
+  100% { transform: rotate(2880deg) scale(3); filter: brightness(5); opacity: 0; }
+}
+.case-hero-gold { animation: case-gold var(--intro-ms, 2500ms) cubic-bezier(0.5, 0, 0.6, 1) forwards; }
+@keyframes gold-bg {
+  0% { background: #171a16; }
+  25% { background: #3a2a05; }
+  50% { background: #3a0f30; }
+  75% { background: #0b2a3a; }
+  100% { background: #3a2a05; }
+}
+.case-hero-gold-bg { animation: gold-bg 0.5s linear infinite, hero-shake 0.3s linear infinite; }
+/* лента при Голде: фон переливается, карточки пляшут */
+@keyframes reel-gold-bg {
+  0% { background: linear-gradient(90deg, #3a2a05, #3a0f30, #0b2a3a); }
+  33% { background: linear-gradient(90deg, #3a0f30, #0b2a3a, #3a2a05); }
+  66% { background: linear-gradient(90deg, #0b2a3a, #3a2a05, #3a0f30); }
+  100% { background: linear-gradient(90deg, #3a2a05, #3a0f30, #0b2a3a); }
+}
+.reel-gold { animation: reel-gold-bg 0.6s linear infinite; box-shadow: inset 0 0 30px #ffd54a; }
+@keyframes reel-gold-card {
+  0%, 100% { transform: rotate(-3deg) translateY(-2px); filter: hue-rotate(0deg); }
+  50% { transform: rotate(3deg) translateY(2px); filter: hue-rotate(180deg); }
+}
+.reel-gold-card { animation: reel-gold-card 0.25s ease-in-out infinite; }
+@keyframes hero-shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-3px) } 75% { transform: translateX(3px) } }

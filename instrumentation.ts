@@ -19,6 +19,12 @@ export async function register() {
       console.error("[шелупонь] не удалось создать блок:", (e as Error).message);
     }
     try {
+      const { ensureGold } = await import("./lib/gold");
+      await ensureGold(prisma, (m) => console.log(`[голда] ${m}`));
+    } catch (e) {
+      console.error("[голда] не удалось:", (e as Error).message);
+    }
+    try {
       const last = await prisma.siteSetting.findUnique({ where: { key: "pricesUpdatedAt" } });
       const age = last ? Date.now() - new Date(last.value).getTime() : Infinity;
       if (age >= EVERY_MS - 60_000) await updateAllPrices(prisma, (m) => console.log(`[цены] ${m}`));
@@ -27,6 +33,6 @@ export async function register() {
     }
   }
 
-  setTimeout(tick, 20_000);
+  setTimeout(tick, 5_000);
   setInterval(tick, 30 * 60 * 1000); // проверяем раз в полчаса, обновляем раз в 6 часов
 }
