@@ -231,6 +231,14 @@ model Transaction {
   @@index([userId, createdAt])
 }
 
+// Не используется (осталась от загрузки картинок). Не удалять: обновление базы потребует стереть данные.
+model Upload {
+  id        String   @id
+  type      String
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
 model SiteSetting {
   key   String @id
   value String
