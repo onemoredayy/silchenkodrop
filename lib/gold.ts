@@ -11,7 +11,7 @@ const TARGET_CASE = "жирный уебан";
 const START_CHANCE = 0.1;
 
 export async function goldItemId(db: Pick<PrismaClient, "siteSetting">) {
-  return (await prisma.siteSetting.findUnique({ where: { key: GOLD_KEY } }))?.value ?? null;
+  return (await db.siteSetting.findUnique({ where: { key: GOLD_KEY } }))?.value ?? null;
 }
 
 export async function ensureGold(prisma: PrismaClient, log: (m: string) => void = console.log) {
