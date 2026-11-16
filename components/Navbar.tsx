@@ -5,9 +5,17 @@ import Avatar from "./Avatar";
 
 const links = [
   { href: "/", label: "Кейсы" },
+  { href: "/battles", label: "Батлы" },
   { href: "/upgrade", label: "Апгрейд" },
+  { href: "/contract", label: "Контракты" },
   { href: "/market", label: "Каталог" },
-  { href: "/inventory", label: "Инвентарь" },
+];
+// на телефоне внизу только главное; каталог и админка — в профиле
+const mobileLinks = [
+  { href: "/", label: "Кейсы" },
+  { href: "/battles", label: "Батлы" },
+  { href: "/upgrade", label: "Апгрейд" },
+  { href: "/contract", label: "Контракты" },
 ];
 
 export default async function Navbar() {
@@ -18,7 +26,7 @@ export default async function Navbar() {
         <Link href="/" className="font-display text-lg leading-none text-bone">
           Сильченко<span className="text-stencil">Дроп</span>
         </Link>
-        <nav className="hidden gap-5 text-sm sm:flex">
+        <nav className="hidden gap-4 text-sm sm:flex lg:gap-5">
           {links.map((l) => (
             <Link key={l.href} href={l.href} className="text-dust hover:text-bone">
               {l.label}
@@ -53,15 +61,16 @@ export default async function Navbar() {
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-ground/95 backdrop-blur sm:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {[...links, ...(user ? [{ href: "/profile", label: "Профиль" }] : []), ...(user?.role === "ADMIN" ? [{ href: "/admin", label: "Админка" }] : [])].map(
+        {[...mobileLinks, { href: user ? "/profile" : "/api/auth/steam/login", label: user ? "Профиль" : "Войти" }].map(
           (l) => (
-            <Link
+            // вход через Steam — обычная ссылка, без предзагрузки Next
+            <a
               key={l.href}
               href={l.href}
               className="flex h-14 min-w-0 flex-1 items-center justify-center px-1 text-center text-[13px] leading-tight text-dust active:text-stencil"
             >
               <span className="truncate">{l.label}</span>
-            </Link>
+            </a>
           ),
         )}
       </nav>

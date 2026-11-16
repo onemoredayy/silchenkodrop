@@ -22,6 +22,11 @@ model User {
   inventory    InventoryItem[]
   transactions Transaction[]
   upgrades     Upgrade[]
+  contracts    Contract[]
+  battles      BattlePlayer[]
+  battleDrops  BattleDrop[]
+  battlesWon   Battle[]        @relation("BattleWinner")
+  battlesMade  Battle[]        @relation("BattleCreator")
 }
 
 // Блоки кейсов на главной: «СИЛЬЧЕНКО», «Обычные кейсы» и т.д.
@@ -65,6 +70,8 @@ model Item {
   openings       Opening[]
   inventory      InventoryItem[]
   upgradeTargets Upgrade[]
+  contracts      Contract[]
+  battleDrops    BattleDrop[]
 }
 
 model CaseItem {
@@ -123,7 +130,66 @@ model Upgrade {
   target     Item     @relation(fields: [targetId], references: [id], onDelete: Cascade)
 }
 
-// type: DEPOSIT | OPEN | SELL | ADMIN
+// Контракт: 3–10 своих скинов → один случайный скин из каталога
+model Contract {
+  id          String   @id @default(cuid())
+  userId      String
+  inputCount  Int
+  inputValue  Float
+  resultId    String
+  resultPrice Float
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  result      Item     @relation(fields: [resultId], references: [id], onDelete: Cascade)
+}
+
+// Батл: 2–4 игрока открывают одни и те же кейсы, у кого дроп дороже — забирает всё
+// status: OPEN (ждём игроков) | DONE | CANCELLED
+model Battle {
+  id         String         @id @default(cuid())
+  creatorId  String
+  maxPlayers Int
+  caseIds    String // JSON-массив id кейсов по порядку раундов (повторы можно)
+  cost       Float // сколько платит каждый участник
+  status     String         @default("OPEN")
+  winnerId   String?
+  createdAt  DateTime       @default(now())
+  finishedAt DateTime?
+  creator    User           @relation("BattleCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  winner     User?          @relation("BattleWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  players    BattlePlayer[]
+  drops      BattleDrop[]
+
+  @@index([status, createdAt])
+}
+
+model BattlePlayer {
+  id       String   @id @default(cuid())
+  battleId String
+  userId   String
+  slot     Int
+  total    Float    @default(0)
+  joinedAt DateTime @default(now())
+  battle   Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([battleId, slot])
+  @@unique([battleId, userId])
+}
+
+model BattleDrop {
+  id       String @id @default(cuid())
+  battleId String
+  userId   String
+  round    Int
+  itemId   String
+  price    Float
+  battle   Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+// type: DEPOSIT | OPEN | SELL | ADMIN | BATTLE | BATTLE_REFUND
 model Transaction {
   id        String   @id @default(cuid())
   userId    String

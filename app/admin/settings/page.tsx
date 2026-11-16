@@ -13,6 +13,7 @@ export default async function AdminSettings({ searchParams }: { searchParams: { 
     { key: "trollChance", label: "Шанс пук-прокрутки, %", hint: "Лента встаёт на самый дорогой предмет и докручивается на выпавший. 0 — выключить.", value: s.trollChance },
     { key: "upgradeEdge", label: "Преимущество сайта в апгрейдах, %", hint: "Шанс = ставка / цель × (100% − это число).", value: s.upgradeEdge },
     { key: "upgradeMaxChance", label: "Максимальный шанс апгрейда, %", hint: "", value: s.upgradeMaxChance },
+    { key: "contractReturn", label: "Средняя отдача контракта, %", hint: "90 — в среднем игрок получает 90% от стоимости вложенных скинов. Выпадает от 20% до 500%.", value: s.contractReturn },
     { key: "usdRub", label: "Курс доллара для цен, ₽", hint: "Цены берутся в долларах. 0 — курс ЦБ автоматически.", value: s.usdRub },
   ];
   return (

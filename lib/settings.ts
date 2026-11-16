@@ -7,7 +7,8 @@ export const DEFAULT_SETTINGS = {
   trollChance: "5", // % — шанс «пук-прокрутки» (лента встаёт на топ и докручивает на выигрыш)
   upgradeEdge: "10", // % — преимущество сайта в апгрейдах
   upgradeMaxChance: "75", // % — максимальный шанс апгрейда
-  usdRub: "0", // курс доллара для цен; 0 — брать курс ЦБ автоматически
+  usdRub: "0",
+  contractReturn: "90", // % — сколько в среднем возвращает контракт от стоимости вложенного // курс доллара для цен; 0 — брать курс ЦБ автоматически
 };
 
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;
@@ -24,5 +25,6 @@ export async function getSettings() {
     upgradeEdge: Number(map.upgradeEdge) || 0,
     upgradeMaxChance: Number(map.upgradeMaxChance) || 75,
     usdRub: Number(map.usdRub) || 0,
+    contractReturn: Number(map.contractReturn) || 90,
   };
 }

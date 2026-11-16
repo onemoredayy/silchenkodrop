@@ -3,6 +3,8 @@ export const TX_LABEL: Record<string, string> = {
   OPEN: "Открытие кейса",
   SELL: "Продажа",
   ADMIN: "Начисление админом",
+  BATTLE: "Вход в батл",
+  BATTLE_REFUND: "Батл отменён, возврат",
 };
 
 export function txDetails(type: string, meta: string | null) {
@@ -12,6 +14,7 @@ export function txDetails(type: string, meta: string | null) {
     if (type === "OPEN") return `${m.case}: ${m.item}`;
     if (type === "SELL") return `${m.count} шт.`;
     if (type === "ADMIN") return String(m.note ?? "");
+    if (type === "BATTLE" && m.cases) return `создал комнату, кейсов: ${m.cases}`;
     if (type === "DEPOSIT") return m.mock ? "тестовое" : "";
   } catch {}
   return "";

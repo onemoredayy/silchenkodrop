@@ -239,7 +239,7 @@ export async function toggleAdmin(formData: FormData) {
 
 // ---------- Настройки ----------
 
-const LIMITS: Record<string, number> = { usdRub: 1000 };
+const LIMITS: Record<string, number> = { usdRub: 1000, contractReturn: 200 };
 
 export async function saveSettings(formData: FormData) {
   await requireAdmin();

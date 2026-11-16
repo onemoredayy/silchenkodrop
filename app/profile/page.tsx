@@ -5,10 +5,11 @@ import { ago, money } from "@/lib/format";
 import { rarityColor } from "@/lib/rarity";
 import Avatar from "@/components/Avatar";
 import SkinImage from "@/components/SkinImage";
+import InventorySection from "@/components/InventorySection";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({ searchParams }: { searchParams: { tab?: string; page?: string } }) {
   const user = await requireUser();
   const [agg, best, recent, favourite] = await Promise.all([
     prisma.opening.aggregate({ where: { userId: user.id }, _count: true, _sum: { pricePaid: true, itemPrice: true } }),
@@ -59,6 +60,12 @@ export default async function ProfilePage() {
             {user.role === "ADMIN" && <span className="ml-3 text-stencil">администратор</span>}
             {favCase && <span className="ml-3">Любимый кейс: {favCase.name}</span>}
           </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <a href="#inventory" className="text-stencil hover:underline">Инвентарь</a>
+            <Link href="/balance" className="text-dust hover:text-bone">Баланс</Link>
+            <Link href="/market" className="text-dust hover:text-bone">Каталог скинов</Link>
+            {user.role === "ADMIN" && <Link href="/admin" className="text-dust hover:text-bone">Админка</Link>}
+          </div>
         </div>
         <form action="/api/auth/logout" method="post">
           <button className="btn-ghost">Выйти</button>
@@ -86,6 +93,8 @@ export default async function ProfilePage() {
           </div>
         </section>
       )}
+
+      <InventorySection userId={user.id} searchParams={searchParams} />
 
       <section>
         <h2 className="h2 mb-4">Последние открытия</h2>
