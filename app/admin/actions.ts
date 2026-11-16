@@ -13,7 +13,6 @@ import { itemPrice } from "@/lib/pricing";
 import { solveChances } from "@/lib/rtp";
 import { EXTRA_CATEGORIES, spread } from "@/lib/junk-cases";
 import { itemForCatalog } from "@/lib/contract";
-import { importImage, saveImage } from "@/lib/uploads";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const num = (f: FormData, k: string) => Number(String(f.get(k) ?? "").replace(",", "."));
@@ -48,25 +47,11 @@ export async function saveCase(formData: FormData) {
   const clash = await prisma.case.findFirst({ where: { slug, NOT: id ? { id } : undefined } });
   if (clash) redirect(`${back}?error=${encodeURIComponent(`Адрес «${slug}» уже занят`)}`);
 
-  // картинка: файл с телефона/компа или ссылка (на картинку или на страницу с ней) — всё сохраняем к себе
-  let image: string | null = str(formData, "image") || null;
-  const file = formData.get("imageFile");
-  try {
-    if (file instanceof File && file.size > 0) {
-      image = await saveImage(Buffer.from(await file.arrayBuffer()));
-    } else if (image && /^https?:\/\//i.test(image) && image !== (id ? (await prisma.case.findUnique({ where: { id } }))?.image : null)) {
-      // скачиваем только новую ссылку; старую не трогаем, чтобы сохранение не зависело от чужого сайта
-      image = await importImage(image);
-    }
-  } catch (e) {
-    redirect(`${back}?error=${encodeURIComponent(`Картинка: ${(e as Error).message}`)}`);
-  }
-
   const data = {
     name,
     slug,
     price: round2(price),
-    image,
+    image: str(formData, "image") || null,
     description: str(formData, "description") || null,
     isActive: formData.get("isActive") === "on",
     sortOrder: Number(str(formData, "sortOrder")) || 0,

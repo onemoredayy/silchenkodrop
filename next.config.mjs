@@ -10,10 +10,7 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   experimental: {
     instrumentationHook: true, // автообновление цен (instrumentation.ts)
-    serverActions: {
-      bodySizeLimit: "10mb", // загрузка картинок кейсов в админке
-      ...(extraOrigins.length ? { allowedOrigins: extraOrigins } : {}),
-    },
+    ...(extraOrigins.length ? { serverActions: { allowedOrigins: extraOrigins } } : {}),
   },
 };
 

@@ -5,4 +5,3 @@ node_modules
 *.db-journal
 prisma/*.db
 .next-new
-uploads/
