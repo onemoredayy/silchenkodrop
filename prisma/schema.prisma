@@ -231,14 +231,6 @@ model Transaction {
   @@index([userId, createdAt])
 }
 
-// Картинки, загруженные в админке (кейсы). id — хеш содержимого.
-model Upload {
-  id        String   @id
-  type      String
-  data      Bytes
-  createdAt DateTime @default(now())
-}
-
 model SiteSetting {
   key   String @id
   value String

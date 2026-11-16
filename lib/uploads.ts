@@ -1,9 +1,9 @@
 import { createHash } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { prisma } from "./prisma";
 
-// Картинки, загруженные в админке, лежат в базе (таблица Upload) и отдаются через /api/img/<id>.
-// Старые ссылки /api/uploads/<имя> тоже работают.
+// Картинки, загруженные в админке, лежат в папке uploads/ рядом с сайтом
+// (не в git, обновления сайта их не трогают) и отдаются через /api/uploads/<имя>.
 export const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 export const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -31,10 +31,10 @@ export async function saveImage(buf: Buffer): Promise<string> {
   if (buf.length > MAX_BYTES) throw new Error("Картинка больше 8 МБ");
   const type = sniff(buf);
   if (!type) throw new Error("Это не картинка (подходят PNG, JPG, WEBP, GIF, AVIF)");
-  const id = createHash("sha1").update(buf).digest("hex").slice(0, 20);
-  // храним в базе — не зависит от папок на сервере и переживает любые обновления
-  await prisma.upload.upsert({ where: { id }, update: {}, create: { id, type, data: buf } });
-  return `/api/img/${id}`;
+  const name = createHash("sha1").update(buf).digest("hex").slice(0, 20) + TYPES[type];
+  await mkdir(UPLOAD_DIR, { recursive: true });
+  await writeFile(path.join(UPLOAD_DIR, name), buf);
+  return `/api/uploads/${name}`;
 }
 
 async function download(url: string) {

@@ -92,20 +92,10 @@ export default async function EditCase({ params, searchParams }: { params: { id:
               className="max-w-full text-sm text-dust file:mr-3 file:h-10 file:cursor-pointer file:rounded file:border file:border-line file:bg-transparent file:px-4 file:text-sm file:font-semibold file:text-bone"
             />
             <span className="text-xs text-dust">или</span>
-            <input
-              name="image"
-              placeholder={kase?.image ? "вставь ссылку, чтобы заменить" : "вставь ссылку на картинку или страницу с ней"}
-              autoComplete="off"
-              className="input min-w-0 flex-1"
-            />
+            <input name="image" defaultValue={kase?.image ?? ""} placeholder="вставь ссылку на картинку или страницу с ней" className="input min-w-0 flex-1" />
           </div>
-          {kase?.image && (
-            <label className="flex items-center gap-2 text-sm text-dust">
-              <input type="checkbox" name="removeImage" className="accent-danger" /> Убрать картинку
-            </label>
-          )}
           <span className="block text-xs text-dust">
-            Подойдёт файл с телефона или любая ссылка (даже на страницу Pinterest/Steam/ВК — картинка возьмётся с неё). Сайт сохранит её к себе. Лучше PNG с прозрачным фоном. Если ничего не выбирать, останется текущая картинка.
+            Подойдёт файл с телефона или любая ссылка (даже на страницу Pinterest/Steam/ВК — картинка возьмётся с неё). Сайт сохранит её к себе. Лучше PNG с прозрачным фоном. Стереть ссылку — покажется название.
           </span>
         </div>
         <label className="space-y-1 sm:col-span-2">
