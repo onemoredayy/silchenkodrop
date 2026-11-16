@@ -169,3 +169,44 @@ export function magnetHum(ms: number, volume = 0.12) {
     o.stop(end + 0.05);
   });
 }
+
+// Фанфары для топ-дропа: восходящее арпеджио + искры
+export function jackpot(volume = 0.2) {
+  const c = ac();
+  if (!c || !soundOn()) return;
+  const t = c.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568, 2093];
+  notes.forEach((f, i) => {
+    const s = t + i * 0.09;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(volume, s + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, s + (i === notes.length - 1 ? 1.4 : 0.5));
+    g.connect(c.destination);
+    ["square", "triangle"].forEach((type) => {
+      const o = c.createOscillator();
+      o.type = type as OscillatorType;
+      o.frequency.value = type === "square" ? f / 2 : f;
+      o.connect(g);
+      o.start(s);
+      o.stop(s + 1.5);
+    });
+  });
+  // «салютные» хлопки
+  for (let k = 0; k < 6; k++) {
+    const s = t + 0.7 + k * 0.28 + Math.random() * 0.1;
+    const len = 0.25;
+    const buf = c.createBuffer(1, Math.floor(c.sampleRate * len), c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const g = c.createGain();
+    g.gain.value = volume * 1.2;
+    const hp = c.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 800 + Math.random() * 1500;
+    src.connect(hp).connect(g).connect(c.destination);
+    src.start(s);
+  }
+}

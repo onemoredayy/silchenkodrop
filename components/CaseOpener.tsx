@@ -7,7 +7,8 @@ import { money } from "@/lib/format";
 import SkinImage from "./SkinImage";
 import ItemCard from "./ItemCard";
 import { playFart } from "@/lib/fart";
-import { lose, readX, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
+import { jackpot, lose, readX, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
+import Fireworks from "./Fireworks";
 
 type Item = {
   id: string;
@@ -57,6 +58,7 @@ function Reel({
   compact,
   onFart,
   ticking,
+  top,
 }: {
   items: Item[];
   drop: Drop | null;
@@ -64,6 +66,7 @@ function Reel({
   compact: boolean;
   onFart: () => void;
   ticking: boolean; // щёлкает только одна лента, иначе при ×5 будет каша
+  top: boolean; // выпал топ-дроп — карточка сияет
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const tickRef = useRef(ticking);
@@ -83,6 +86,8 @@ function Reel({
   const viewport = useRef<HTMLDivElement>(null);
   const fart = useRef(onFart);
   fart.current = onFart;
+  const topRef = useRef(top);
+  topRef.current = top;
   const [strip, setStrip] = useState<Item[]>(() =>
     // стартовая лента без случайности, чтобы сервер и браузер нарисовали одно и то же
     items.length ? Array.from({ length: 12 }, (_, i) => items[i % items.length]) : [],
@@ -90,42 +95,80 @@ function Reel({
   const [offset, setOffset] = useState(0);
   const [animate, setAnimate] = useState(false);
   const [duration, setDuration] = useState(SPIN_MS);
+  const [live, setLive] = useState(false); // лента сейчас крутится
+  const [landed, setLanded] = useState<{ index: number; top: boolean } | null>(null);
+  // где лента остановилась: индекс и смещение в долях карточки — чтобы пересчитать при смене размера
+  const target = useRef<{ index: number; jitter: number } | null>(null);
+  // Лента крутится только при НОВОМ запуске. Раньше лента, появившаяся при выборе ×2…×5,
+  // видела старый номер запуска и старый дроп и начинала крутиться сама.
+  const seenRun = useRef(run);
+
+  const centerOn = (index: number, jitter: number) => {
+    const w = viewport.current?.clientWidth ?? 800;
+    return -(index * step + card / 2 - w / 2 + jitter * card);
+  };
+
+  // сменился размер карточек (×1 ↔ ×N, поворот телефона) — ставим ленту туда же, без анимации
+  useEffect(() => {
+    if (live) return;
+    setAnimate(false);
+    setOffset(target.current ? centerOn(target.current.index, target.current.jitter) : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card]);
 
   useEffect(() => {
-    if (!drop || run === 0) return;
+    if (run === seenRun.current) return;
+    seenRun.current = run;
+    if (!drop) return;
     const decoy = drop.troll;
     setAnimate(false);
     setOffset(0);
+    setLanded(null);
+    setLive(true);
     setStrip(buildStrip(items, drop.item, decoy));
-    const w = viewport.current?.clientWidth ?? 800;
-    const centerOn = (index: number, jitter: number) => -(index * step + card / 2 - w / 2 + jitter);
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
     let stopTicks = () => {};
     // ждём, пока лента перерисуется в начальной позиции, затем крутим
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         setDuration(SPIN_MS);
         setAnimate(true);
-        setOffset(centerOn(WIN_INDEX, (Math.random() - 0.5) * card * (decoy ? 0.3 : 0.7)));
+        const jitter = (Math.random() - 0.5) * (decoy ? 0.3 : 0.7);
+        target.current = { index: WIN_INDEX, jitter };
+        setOffset(centerOn(WIN_INDEX, jitter));
         // щелчок на каждой карточке, проходящей под стрелкой
         if (tickRef.current && stripRef.current) {
           stopTicks = tickWhileMoving(stripRef.current, readX, step, SPIN_MS + (decoy ? TROLL_PAUSE_MS + TROLL_MOVE_MS : 0) + 100);
         }
       });
     });
+    // остановились: карточка под стрелкой выпрыгивает, топ — сияет
+    timers.push(
+      setTimeout(() => {
+        setLive(false);
+        setLanded({ index: WIN_INDEX, top: decoy ? true : topRef.current });
+      }, SPIN_MS),
+    );
     if (decoy) {
-      // Пук-прокрутка: замерли на топе… пук… доезжаем до настоящего предмета
-      timer = setTimeout(() => {
-        fart.current();
-        setDuration(TROLL_MOVE_MS);
-        setOffset(centerOn(WIN_INDEX + 1, (Math.random() - 0.5) * card * 0.4));
-      }, SPIN_MS + TROLL_PAUSE_MS);
+      // Пук-прокрутка: замерли на сияющем топе… пук… доезжаем до настоящего предмета
+      timers.push(
+        setTimeout(() => {
+          fart.current();
+          setLanded(null);
+          setDuration(TROLL_MOVE_MS);
+          const jitter = (Math.random() - 0.5) * 0.4;
+          target.current = { index: WIN_INDEX + 1, jitter };
+          setOffset(centerOn(WIN_INDEX + 1, jitter));
+        }, SPIN_MS + TROLL_PAUSE_MS),
+        setTimeout(() => setLanded({ index: WIN_INDEX + 1, top: false }), SPIN_MS + TROLL_PAUSE_MS + TROLL_MOVE_MS),
+      );
     }
     return () => {
       cancelAnimationFrame(raf);
-      if (timer) clearTimeout(timer);
+      timers.forEach(clearTimeout);
       stopTicks();
+      setLive(false);
     };
     // лента перезапускается только по номеру запуска
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,13 +177,19 @@ function Reel({
   return (
     <div
       ref={viewport}
-      className="relative overflow-hidden border-b border-line bg-ground"
-      style={{ height: cardH + 28 }}
+      className={`relative overflow-hidden border-b border-line bg-ground ${landed?.top ? "reel-flash" : ""}`}
+      style={{
+        height: cardH + 28,
+        // края ленты плавно уходят в тень
+        maskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)",
+        WebkitMaskImage: "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)",
+      }}
     >
       <div
         ref={stripRef}
-        className="flex h-full items-center"
+        className={`flex h-full items-center ${live ? "reel-spin" : ""}`}
         style={{
+          ["--spin-ms" as string]: `${SPIN_MS}ms`,
           gap: GAP,
           transform: `translateX(${offset}px)`,
           transition: animate
@@ -151,8 +200,14 @@ function Reel({
         {strip.map((it, i) => (
           <div
             key={i}
-            className="flex shrink-0 flex-col rounded border border-line bg-panel"
-            style={{ width: card, height: cardH }}
+            className={`relative flex shrink-0 flex-col rounded border border-line bg-panel transition-opacity duration-300 ${
+              landed?.index === i ? (landed.top ? "reel-jackpot" : "reel-win") : landed ? "opacity-40" : ""
+            }`}
+            style={{
+              width: card,
+              height: cardH,
+              ...(landed?.index === i && !landed.top ? { boxShadow: `0 0 18px 2px ${rarityColor(it.rarity)}` } : {}),
+            }}
           >
             <div className="min-h-0 flex-1 p-2">
               <SkinImage src={it.image} name={it.name} className="h-full w-full" />
@@ -165,7 +220,7 @@ function Reel({
         ))}
       </div>
       {/* указатель */}
-      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-stencil" />
+      <div className={`pointer-events-none absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-stencil ${live ? "reel-pointer-live" : ""}`} />
       <div className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 border-x-[7px] border-t-[9px] border-x-transparent border-t-stencil" />
       <div className="pointer-events-none absolute bottom-0 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[7px] border-b-[9px] border-x-transparent border-b-stencil" />
     </div>
@@ -207,6 +262,11 @@ export default function CaseOpener({
   soundRef.current = sound;
   const farted = useRef(false);
   const finishTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [fire, setFire] = useState(0); // номер салюта
+  const [banner, setBanner] = useState<Base | null>(null);
+  const maxPrice = Math.max(0, ...items.map((i) => i.price));
+  // топ-дроп: самый дорогой предмет кейса или в 10+ раз дороже кейса (подстава пук-прокрутки — не топ)
+  const isTop = (d: Drop) => !d.troll && d.item.price > 0 && (d.item.price >= maxPrice * 0.999 || d.item.price >= price * 10);
 
   useEffect(() => () => clearTimeout(finishTimer.current), []);
 
@@ -217,7 +277,7 @@ export default function CaseOpener({
   function pickCount(n: number) {
     if (busy) return;
     setCount(n);
-    if (state !== "done") setReels(n);
+    setReels(n);
   }
 
   async function open() {
@@ -226,6 +286,7 @@ export default function CaseOpener({
     setSoldIds([]);
     setSoldTotal(0);
     setState("spinning");
+    setReels(count); // ленты появляются заранее, до ответа сервера
     const res = await fetch(`/api/cases/${caseId}/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -245,6 +306,14 @@ export default function CaseOpener({
 
     const finish = () => {
       setState("done");
+      const best = got.filter(isTop).sort((a, b) => b.item.price - a.item.price)[0];
+      if (best) {
+        setFire((f) => f + 1);
+        setBanner(best.item);
+        setTimeout(() => setBanner(null), 3300);
+        if (soundRef.current) jackpot();
+        return router.refresh();
+      }
       // итоговый звук: выпало дороже, чем потрачено, — победный, иначе глухой
       const gotSum = got.reduce((acc, d) => acc + d.item.price, 0);
       if (soundRef.current) (gotSum >= price * got.length ? win : lose)();
@@ -294,9 +363,34 @@ export default function CaseOpener({
 
   return (
     <div className="panel overflow-hidden">
+      <Fireworks fire={fire} />
+      {banner && (
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+          <div key={fire} className="jackpot-banner text-center">
+            <div
+              className="font-display text-5xl sm:text-7xl"
+              style={{ color: "#ffe08a", textShadow: "0 0 18px #e0b43a, 0 0 40px #ff5fd2, 0 4px 0 #171a16" }}
+            >
+              ТОП ДРОП!
+            </div>
+            <div className="mt-2 inline-block rounded bg-ground/80 px-3 py-1 text-base sm:text-lg">
+              {banner.name} · <span className="text-stencil">{money(banner.price)}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ленты: по одной на каждый кейс */}
       {Array.from({ length: reels }, (_, i) => (
-        <Reel key={i} items={items} drop={drops[i] ?? null} run={run} compact={reels > 1} onFart={fartOnce} ticking={i === 0 && sound} />
+        <Reel
+          key={i}
+          items={items}
+          drop={drops[i] ?? null}
+          run={run}
+          compact={reels > 1}
+          onFart={fartOnce}
+          ticking={i === 0 && sound}
+          top={!!drops[i] && isTop(drops[i])}
+        />
       ))}
 
       {/* результат: один кейс */}
