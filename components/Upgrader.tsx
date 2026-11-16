@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { rarityColor } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import { upgradeChance } from "@/lib/upgrade";
 import SkinImage from "./SkinImage";
 import ItemCard from "./ItemCard";
+import { angleReader, lose, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
 import Pager from "./Pager";
 
 type Inv = { id: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
@@ -28,6 +29,9 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
   const [target, setTarget] = useState<Target | null>(null);
   const [spinning, setSpinning] = useState(false);
   const [angle, setAngle] = useState(0);
+  const arrowRef = useRef<HTMLDivElement>(null);
+  const [sound, setSound] = useState(true);
+  useEffect(() => setSound(soundOn()), []);
   const [result, setResult] = useState<null | { success: boolean }>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +91,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
   }
 
   async function go() {
+    unlockAudio();
     if (!target || !picked.length) return;
     setError(null);
     setResult(null);
@@ -104,8 +109,11 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
     // стрелка встаёт ровно туда, куда выпал бросок сервера: зелёная зона — [0, шанс)
     const base = angle - (angle % 360) + 360 * 5;
     setAngle(base + data.roll * 360);
+    // щелчок каждые 15° поворота стрелки
+    if (sound && arrowRef.current) tickWhileMoving(arrowRef.current, angleReader(), 15, SPIN_MS + 100);
     setTimeout(() => {
       setSpinning(false);
+      if (sound) (data.success ? win : lose)();
       setResult({ success: data.success });
       setPicked([]);
       router.refresh();
@@ -166,6 +174,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
           </svg>
           {/* стрелка */}
           <div
+            ref={arrowRef}
             className="absolute inset-0"
             style={{
               transform: `rotate(${angle}deg)`,
@@ -193,6 +202,18 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
             </button>
           ))}
         </div>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
+          <input
+            type="checkbox"
+            checked={sound}
+            onChange={(e) => {
+              setSound(e.target.checked);
+              setSoundOn(e.target.checked);
+            }}
+            className="accent-stencil"
+          />
+          Звук
+        </label>
         {error && <p className="text-center text-sm text-danger">{error}</p>}
         {result?.success && <p className="text-center text-sm text-ok">Скин уже в инвентаре.</p>}
       </section>

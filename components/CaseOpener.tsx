@@ -7,6 +7,7 @@ import { money } from "@/lib/format";
 import SkinImage from "./SkinImage";
 import ItemCard from "./ItemCard";
 import { playFart } from "@/lib/fart";
+import { lose, readX, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
 
 type Item = {
   id: string;
@@ -55,13 +56,18 @@ function Reel({
   run,
   compact,
   onFart,
+  ticking,
 }: {
   items: Item[];
   drop: Drop | null;
   run: number;
   compact: boolean;
   onFart: () => void;
+  ticking: boolean; // щёлкает только одна лента, иначе при ×5 будет каша
 }) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const tickRef = useRef(ticking);
+  tickRef.current = ticking;
   // ширина карточки в ленте; на телефоне меньше, чтобы было видно соседей
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -95,12 +101,17 @@ function Reel({
     const centerOn = (index: number, jitter: number) => -(index * step + card / 2 - w / 2 + jitter);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopTicks = () => {};
     // ждём, пока лента перерисуется в начальной позиции, затем крутим
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         setDuration(SPIN_MS);
         setAnimate(true);
         setOffset(centerOn(WIN_INDEX, (Math.random() - 0.5) * card * (decoy ? 0.3 : 0.7)));
+        // щелчок на каждой карточке, проходящей под стрелкой
+        if (tickRef.current && stripRef.current) {
+          stopTicks = tickWhileMoving(stripRef.current, readX, step, SPIN_MS + (decoy ? TROLL_PAUSE_MS + TROLL_MOVE_MS : 0) + 100);
+        }
       });
     });
     if (decoy) {
@@ -114,6 +125,7 @@ function Reel({
     return () => {
       cancelAnimationFrame(raf);
       if (timer) clearTimeout(timer);
+      stopTicks();
     };
     // лента перезапускается только по номеру запуска
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,6 +138,7 @@ function Reel({
       style={{ height: cardH + 28 }}
     >
       <div
+        ref={stripRef}
         className="flex h-full items-center"
         style={{
           gap: GAP,
@@ -189,6 +202,7 @@ export default function CaseOpener({
   const [selling, setSelling] = useState(false);
   const [money_, setMoney] = useState(balance);
   const [sound, setSound] = useState(true);
+  useEffect(() => setSound(soundOn()), []);
   const soundRef = useRef(sound);
   soundRef.current = sound;
   const farted = useRef(false);
@@ -207,6 +221,7 @@ export default function CaseOpener({
   }
 
   async function open() {
+    unlockAudio();
     setError(null);
     setSoldIds([]);
     setSoldTotal(0);
@@ -230,6 +245,9 @@ export default function CaseOpener({
 
     const finish = () => {
       setState("done");
+      // итоговый звук: выпало дороже, чем потрачено, — победный, иначе глухой
+      const gotSum = got.reduce((acc, d) => acc + d.item.price, 0);
+      if (soundRef.current) (gotSum >= price * got.length ? win : lose)();
       router.refresh();
     };
     if (fast) return finish();
@@ -278,7 +296,7 @@ export default function CaseOpener({
     <div className="panel overflow-hidden">
       {/* ленты: по одной на каждый кейс */}
       {Array.from({ length: reels }, (_, i) => (
-        <Reel key={i} items={items} drop={drops[i] ?? null} run={run} compact={reels > 1} onFart={fartOnce} />
+        <Reel key={i} items={items} drop={drops[i] ?? null} run={run} compact={reels > 1} onFart={fartOnce} ticking={i === 0 && sound} />
       ))}
 
       {/* результат: один кейс */}
@@ -398,7 +416,15 @@ export default function CaseOpener({
           Без анимации
         </label>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
-          <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} className="accent-stencil" />
+          <input
+            type="checkbox"
+            checked={sound}
+            onChange={(e) => {
+              setSound(e.target.checked);
+              setSoundOn(e.target.checked);
+            }}
+            className="accent-stencil"
+          />
           Звук
         </label>
         {loggedIn && (

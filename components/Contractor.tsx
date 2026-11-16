@@ -7,6 +7,7 @@ import { rarityColor, rarityLabel } from "@/lib/rarity";
 import ItemCard from "./ItemCard";
 import Pager from "./Pager";
 import SkinImage from "./SkinImage";
+import { lose, unlockAudio, setSoundOn, slowingTicks, soundOn, win } from "@/lib/sfx";
 
 type Inv = { id: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
 type Result = { inventoryId: string; value: number; item: Omit<Inv, "id"> & { id: string } };
@@ -25,6 +26,8 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
   const [rolling, setRolling] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sound, setSound] = useState(true);
+  useEffect(() => setSound(soundOn()), []);
 
   // сервер прислал новый инвентарь (после продажи и т.п.)
   useEffect(() => setItems(inventory), [inventory]);
@@ -49,6 +52,7 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
   }
 
   async function sign() {
+    unlockAudio();
     setBusy(true);
     setError(null);
     setResult(null);
@@ -63,8 +67,10 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
       return setError(data.error ?? "Не получилось");
     }
     setRolling(true);
+    if (sound) slowingTicks(REVEAL_MS);
     setTimeout(() => {
       setRolling(false);
+      if (sound) (data.item.price >= data.value ? win : lose)();
       setBusy(false);
       setResult(data);
       setItems((list) => [
@@ -153,6 +159,18 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
         <button onClick={sign} disabled={busy || picked.length < MIN} className="btn-primary h-12 w-full text-base">
           {rolling ? "Подписываем…" : picked.length < MIN ? `Выбери ещё ${MIN - picked.length}` : "Подписать контракт"}
         </button>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
+          <input
+            type="checkbox"
+            checked={sound}
+            onChange={(e) => {
+              setSound(e.target.checked);
+              setSoundOn(e.target.checked);
+            }}
+            className="accent-stencil"
+          />
+          Звук
+        </label>
         {error && <p className="text-sm text-danger">{error}</p>}
 
         {result && (
