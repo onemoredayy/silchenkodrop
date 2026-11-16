@@ -80,7 +80,7 @@ npm ci --no-audit --no-fund --loglevel=error
 npx prisma db push --skip-generate >/dev/null
 [ "$FIRST" = 1 ] && npm run db:seed
 # Собираем в .next-new: если сборка упадёт, работающий сайт не сломается
-rm -rf .next-new
+rm -rf .next-new .next/types  # старые типы прошлой сборки мешают проверке типов; сайту они не нужны
 NEXT_DIST_DIR=.next-new npx prisma generate >/dev/null
 if ! NEXT_DIST_DIR=.next-new npx next build; then
   echo "Сборка не удалась — сайт остался на прошлой версии."
