@@ -142,3 +142,30 @@ export function slowingTicks(ms: number) {
   }
   return () => timers.forEach(clearTimeout);
 }
+
+// Гул магнита: низкий нарастающий «вжжж» на время притяжения стрелки
+export function magnetHum(ms: number, volume = 0.12) {
+  const c = ac();
+  if (!c || !soundOn()) return;
+  const t = c.currentTime;
+  const end = t + ms / 1000;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(volume, t + 0.25);
+  g.gain.setValueAtTime(volume, end - 0.15);
+  g.gain.exponentialRampToValueAtTime(0.0001, end);
+  const lp = c.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(300, t);
+  lp.frequency.linearRampToValueAtTime(900, end);
+  lp.connect(g).connect(c.destination);
+  [1, 1.01].forEach((k) => {
+    const o = c.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(55 * k, t);
+    o.frequency.exponentialRampToValueAtTime(110 * k, end);
+    o.connect(lp);
+    o.start(t);
+    o.stop(end + 0.05);
+  });
+}

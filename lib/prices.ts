@@ -1,6 +1,7 @@
 // Цены на ВСЕ предметы Steam одним запросом: prices.csgotrader.app (база расширения CSGO Trader).
 // Цены там в долларах, переводим в рубли по курсу ЦБ (или по курсу из настроек админки).
 import type { PrismaClient } from "@prisma/client";
+import { RARE_USD, ensureRareRows } from "./rare-prices";
 
 export const PRICES_URL = "https://prices.csgotrader.app/latest/steam.json";
 const CBR_URL = "https://www.cbr-xml-daily.ru/daily_json.js";
@@ -35,14 +36,15 @@ export async function updateAllPrices(prisma: PrismaClient, log = console.log) {
   if (!res.ok) throw new Error(`Цены не скачались: HTTP ${res.status}`);
   const data = (await res.json()) as Record<string, PriceRow>;
   const rate = await usdRub(prisma);
+  await ensureRareRows(prisma);
 
   const rows = await prisma.skinCatalog.findMany({ select: { id: true, marketHashName: true, price: true } });
   const now = new Date();
   const updates: { id: string; price: number }[] = [];
   for (const r of rows) {
     const p = data[r.marketHashName];
-    // берём недельную цену: она устойчивее суточной; если её нет — что есть
-    const usd = p?.last_7d ?? p?.last_24h ?? p?.last_30d ?? p?.last_90d;
+    // сверхдорогие предметы — по оценке сообщества (lib/rare-prices.ts), остальное — недельная цена Steam
+    const usd = RARE_USD[r.marketHashName] ?? p?.last_7d ?? p?.last_24h ?? p?.last_30d ?? p?.last_90d;
     if (usd == null || usd <= 0) continue;
     const rub = Math.round(usd * rate * 100) / 100;
     if (rub !== r.price) updates.push({ id: r.id, price: rub });

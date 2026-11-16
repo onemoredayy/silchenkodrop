@@ -7,14 +7,24 @@ import { money } from "@/lib/format";
 import { upgradeChance } from "@/lib/upgrade";
 import SkinImage from "./SkinImage";
 import ItemCard from "./ItemCard";
-import { angleReader, lose, unlockAudio, setSoundOn, soundOn, tickWhileMoving, win } from "@/lib/sfx";
+import { lose, magnetHum, setSoundOn, soundOn, tick, unlockAudio, win } from "@/lib/sfx";
 import Pager from "./Pager";
 
 type Inv = { id: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
 type Target = { marketHashName: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
 
 const MULTS = [1.5, 2, 3, 5, 10];
-const SPIN_MS = 4500;
+const SPIN_MS = 4500; // основная прокрутка
+const TEASE_MS = 750; // «азартная»: стрелка дрожит, будто вот-вот выиграл
+const PULL_MS = 1500; // «азартная»: магнит утаскивает стрелку в красное
+const GAMBLE_KEY = "upgradeGamble";
+const GHOSTS = 4; // шлейф за стрелкой на скорости
+
+const easeOut = (p: number) => 1 - Math.pow(1 - p, 4);
+const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type Phase = "idle" | "spin" | "tease" | "magnet" | "done";
 const PER_PAGE = 9; // 3 ряда по 3 карточки — и в инвентаре, и в целях
 
 export default function Upgrader({ inventory, edge, maxChance }: { inventory: Inv[]; edge: number; maxChance: number }) {
@@ -28,10 +38,22 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
   const [invPage, setInvPage] = useState(1);
   const [target, setTarget] = useState<Target | null>(null);
   const [spinning, setSpinning] = useState(false);
-  const [angle, setAngle] = useState(0);
-  const arrowRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [magnetDeg, setMagnetDeg] = useState(0);
+  const [gamble, setGamble] = useState(false);
+  const arrowRef = useRef<SVGGElement>(null);
+  const ghostRefs = useRef<(SVGGElement | null)[]>([]);
+  const angleRef = useRef(0);
+  const trail = useRef<number[]>([]);
+  const raf = useRef(0);
   const [sound, setSound] = useState(true);
-  useEffect(() => setSound(soundOn()), []);
+  useEffect(() => {
+    setSound(soundOn());
+    try {
+      setGamble(localStorage.getItem(GAMBLE_KEY) === "on");
+    } catch {}
+    return () => cancelAnimationFrame(raf.current);
+  }, []);
   const [result, setResult] = useState<null | { success: boolean }>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +112,53 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
     }
   }
 
+  // Стрелка двигается напрямую через DOM (без перерисовки React 60 раз в секунду)
+  function draw(a: number) {
+    angleRef.current = a;
+    arrowRef.current?.setAttribute("transform", `rotate(${a} 110 110)`);
+    trail.current.unshift(a);
+    trail.current.length = Math.min(trail.current.length, GHOSTS * 3 + 1);
+    ghostRefs.current.forEach((g, i) => {
+      const h = trail.current[(i + 1) * 3] ?? a;
+      g?.setAttribute("transform", `rotate(${h} 110 110)`);
+    });
+  }
+
+  // Плавно ведёт стрелку от from до to; shake — дрожь в градусах; щелчок на каждые 15°
+  function tween(from: number, to: number, ms: number, ease: (p: number) => number, shake = 0, ticks = true) {
+    return new Promise<void>((done) => {
+      const t0 = performance.now();
+      let step = Math.floor(from / 15);
+      const frame = (now: number) => {
+        const p = Math.min(1, (now - t0) / ms);
+        let a = from + (to - from) * ease(p);
+        if (shake) a += Math.sin(now / 18) * shake * (1 - p * 0.6);
+        draw(a);
+        const st = Math.floor(a / 15);
+        if (ticks && st !== step) {
+          step = st;
+          if (sound) tick();
+        }
+        if (p < 1) raf.current = requestAnimationFrame(frame);
+        else {
+          draw(to);
+          done();
+        }
+      };
+      raf.current = requestAnimationFrame(frame);
+    });
+  }
+
+  function toggleGamble() {
+    if (spinning) return;
+    setGamble((g) => {
+      try {
+        localStorage.setItem(GAMBLE_KEY, g ? "off" : "on");
+      } catch {}
+      return !g;
+    });
+  }
+
   async function go() {
     unlockAudio();
     if (!target || !picked.length) return;
@@ -106,18 +175,44 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
       setSpinning(false);
       return setError(data.error ?? "Ошибка");
     }
-    // стрелка встаёт ровно туда, куда выпал бросок сервера: зелёная зона — [0, шанс)
-    const base = angle - (angle % 360) + 360 * 5;
-    setAngle(base + data.roll * 360);
-    // щелчок каждые 15° поворота стрелки
-    if (sound && arrowRef.current) tickWhileMoving(arrowRef.current, angleReader(), 15, SPIN_MS + 100);
-    setTimeout(() => {
-      setSpinning(false);
-      if (sound) (data.success ? win : lose)();
-      setResult({ success: data.success });
-      setPicked([]);
-      router.refresh();
-    }, SPIN_MS + 100);
+
+    // Итог определяет только бросок сервера: зелёная зона — [0, шанс), стрелка в конце
+    // всегда стоит ровно на data.roll. «Азартный» режим меняет лишь путь стрелки.
+    const roll: number = data.roll;
+    const c = (data.chance ?? chance) / 100;
+    const start = angleRef.current;
+    const base = start - (start % 360) + 360 * 6;
+    trail.current = [];
+
+    setPhase("spin");
+    if (!gamble) {
+      await tween(start, base + roll * 360, SPIN_MS, easeOut);
+    } else if (data.success) {
+      await tween(start, base + roll * 360, SPIN_MS - 300, easeOut);
+      setPhase("tease");
+      await tween(angleRef.current, angleRef.current, TEASE_MS, (p) => p, 2.5, false);
+    } else {
+      // Останавливаемся в зелёном у ближайшего к броску края, потом магнит тянет к броску
+      const eps = Math.min(0.025, c * 0.35);
+      const forward = roll - c <= 1 - roll;
+      const teaseAt = base + (forward ? c - eps : eps) * 360;
+      const final = base + (forward ? roll : roll - 1) * 360;
+      await tween(start, teaseAt, SPIN_MS - 300, easeOut);
+      setMagnetDeg(roll * 360);
+      setPhase("tease");
+      await tween(teaseAt, teaseAt, TEASE_MS, (p) => p, 2.5, false);
+      setPhase("magnet");
+      if (sound) magnetHum(PULL_MS);
+      await sleep(150);
+      await tween(teaseAt, final, PULL_MS, easeInOut, 1.5);
+    }
+
+    setPhase("done");
+    setSpinning(false);
+    if (sound) (data.success ? win : lose)();
+    setResult({ success: data.success });
+    setPicked([]);
+    router.refresh();
   }
 
   const R = 90;
@@ -158,36 +253,95 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
 
       {/* круг */}
       <section className="order-1 flex flex-col items-center justify-center gap-4 lg:order-none">
-        <div className="relative h-[180px] w-[180px] sm:h-[220px] sm:w-[220px]">
-          <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
-            <circle cx="110" cy="110" r={R} fill="none" stroke="#353b33" strokeWidth="14" />
-            <circle
-              cx="110"
-              cy="110"
-              r={R}
-              fill="none"
-              stroke={result ? (result.success ? "#8fbf6a" : "#e0614a") : "#e0b43a"}
-              strokeWidth="14"
-              strokeDasharray={`${(chance / 100) * C} ${C}`}
-              style={{ transition: "stroke-dasharray 300ms" }}
-            />
+        <style>{`
+          @keyframes up-pop { 0% { transform: scale(1) } 35% { transform: scale(1.12) } 100% { transform: scale(1) } }
+          @keyframes up-shake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-7px) rotate(-2deg) } 40% { transform: translateX(6px) rotate(2deg) } 60% { transform: translateX(-4px) } 80% { transform: translateX(3px) } }
+          @keyframes up-glow { 0%,100% { filter: drop-shadow(0 0 6px rgba(224,180,58,.35)) } 50% { filter: drop-shadow(0 0 18px rgba(224,180,58,.8)) } }
+          @keyframes up-tease { 0%,100% { filter: drop-shadow(0 0 8px rgba(143,191,106,.5)) } 50% { filter: drop-shadow(0 0 22px rgba(143,191,106,1)) } }
+          @keyframes up-magnet { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-2px) } }
+          @keyframes up-wave { 0% { opacity: 0; transform: translateY(-4px) } 50% { opacity: 1 } 100% { opacity: 0; transform: translateY(10px) } }
+          .up-spin { animation: up-glow .5s ease-in-out infinite }
+          .up-tease { animation: up-tease .25s ease-in-out infinite }
+          .up-win { animation: up-pop .5s ease-out }
+          .up-lose { animation: up-shake .45s ease-out }
+        `}</style>
+        <div
+          key={result ? (result.success ? "w" : "l") + phase : phase}
+          className={`relative mt-4 h-[180px] w-[180px] sm:h-[220px] sm:w-[220px] ${
+            phase === "spin" ? "up-spin" : phase === "tease" || phase === "magnet" ? "up-tease" : result ? (result.success ? "up-win" : "up-lose") : ""
+          }`}
+        >
+          <svg viewBox="0 0 220 220" className="h-full w-full overflow-visible">
+            <g transform="rotate(-90 110 110)">
+              <circle cx="110" cy="110" r={R} fill="none" stroke="#353b33" strokeWidth="14" />
+              <circle
+                cx="110"
+                cy="110"
+                r={R}
+                fill="none"
+                stroke={result ? (result.success ? "#8fbf6a" : "#e0614a") : phase === "tease" || phase === "magnet" ? "#8fbf6a" : "#e0b43a"}
+                strokeWidth="14"
+                strokeDasharray={`${(chance / 100) * C} ${C}`}
+                style={{ transition: "stroke-dasharray 300ms, stroke 200ms" }}
+              />
+            </g>
+
+            {/* шлейф стрелки — виден только на скорости */}
+            {Array.from({ length: GHOSTS }, (_, i) => (
+              <g
+                key={i}
+                ref={(el) => {
+                  ghostRefs.current[i] = el;
+                }}
+                className="text-stencil"
+                style={{ opacity: phase === "spin" ? 0.32 - i * 0.07 : 0, transition: "opacity 300ms" }}
+              >
+                <path d="M110 16 L121 40 L110 35 L99 40 Z" fill="currentColor" />
+              </g>
+            ))}
+
+            {/* стрелка: наконечник у кольца, хвост с оперением ближе к центру */}
+            <g ref={arrowRef} className={result ? (result.success ? "text-ok" : "text-danger") : "text-bone"}>
+              <line x1="110" y1="36" x2="110" y2="74" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+              <path d="M110 14 L123 40 L110 34 L97 40 Z" fill="currentColor" />
+              <path d="M110 66 L102 78 M110 66 L118 78 M110 72 L102 84 M110 72 L118 84" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </g>
+
+            {/* магнит — появляется только в «азартной» прокрутке при проигрыше */}
+            <g transform={`rotate(${magnetDeg} 110 110)`} style={{ opacity: phase === "magnet" ? 1 : 0, transition: "opacity 250ms" }}>
+              <g transform="translate(110 -10)">
+                <g style={{ animation: phase === "magnet" ? "up-magnet .12s linear infinite" : "none" }}>
+                  <path d="M-11 8 V0 A11 11 0 0 1 11 0 V8" fill="none" stroke="#e0614a" strokeWidth="7" />
+                  <rect x="-14.5" y="7" width="7" height="7" fill="#cfd3d6" />
+                  <rect x="7.5" y="7" width="7" height="7" fill="#cfd3d6" />
+                </g>
+                {[0, 1, 2].map((i) => (
+                  <path
+                    key={i}
+                    d="M-9 20 Q0 26 9 20"
+                    fill="none"
+                    stroke="#e0614a"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    style={{ animation: phase === "magnet" ? `up-wave .6s ${i * 0.2}s linear infinite` : "none", opacity: 0 }}
+                  />
+                ))}
+              </g>
+            </g>
           </svg>
-          {/* стрелка */}
-          <div
-            ref={arrowRef}
-            className="absolute inset-0"
-            style={{
-              transform: `rotate(${angle}deg)`,
-              transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(0.15, 0.7, 0.1, 1)` : "none",
-            }}
-          >
-            <div className="absolute left-1/2 top-[6px] h-[30px] w-[3px] -translate-x-1/2 bg-bone" />
-          </div>
-          <div className="absolute inset-0 grid place-items-center text-center">
+          <div className="pointer-events-none absolute inset-0 grid place-items-center pt-6 text-center">
             <div>
               <div className="font-display text-3xl">{chance ? `${chance}%` : "—"}</div>
               <div className="text-xs text-dust">
-                {result ? (result.success ? "Апгрейд удался" : "Не повезло") : "шанс"}
+                {result
+                  ? result.success
+                    ? "Апгрейд удался"
+                    : "Не повезло"
+                  : phase === "tease"
+                    ? "Есть?!"
+                    : phase === "magnet"
+                      ? "Магнит!"
+                      : "шанс"}
               </div>
             </div>
           </div>
@@ -202,6 +356,19 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={toggleGamble}
+          disabled={spinning}
+          className={`flex h-10 w-full items-center justify-between rounded-card border px-3 text-sm transition-colors ${
+            gamble ? "border-danger bg-danger/10 text-bone" : "border-line text-dust hover:bg-raised"
+          }`}
+        >
+          <span>🧲 Азартная прокрутка</span>
+          <span className={`relative h-5 w-9 rounded-full transition-colors ${gamble ? "bg-danger" : "bg-line"}`}>
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-bone transition-all ${gamble ? "left-[18px]" : "left-0.5"}`} />
+          </span>
+        </button>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
           <input
             type="checkbox"
