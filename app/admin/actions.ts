@@ -49,14 +49,19 @@ export async function saveCase(formData: FormData) {
   if (clash) redirect(`${back}?error=${encodeURIComponent(`Адрес «${slug}» уже занят`)}`);
 
   // картинка: файл с телефона/компа или ссылка (на картинку или на страницу с ней) — всё сохраняем к себе
-  let image: string | null = str(formData, "image") || null;
+  // Картинка: новый файл > новая ссылка > «убрать» > оставить как было
+  const current = id ? (await prisma.case.findUnique({ where: { id }, select: { image: true } }))?.image ?? null : null;
+  let image: string | null = current;
+  const link = str(formData, "image");
   const file = formData.get("imageFile");
   try {
-    if (file instanceof File && file.size > 0) {
-      image = await saveImage(Buffer.from(await file.arrayBuffer()));
-    } else if (image && /^https?:\/\//i.test(image) && image !== (id ? (await prisma.case.findUnique({ where: { id } }))?.image : null)) {
-      // скачиваем только новую ссылку; старую не трогаем, чтобы сохранение не зависело от чужого сайта
-      image = await importImage(image);
+    if (file && typeof file === "object" && "arrayBuffer" in file && (file as Blob).size > 0) {
+      image = await saveImage(Buffer.from(await (file as Blob).arrayBuffer()));
+    } else if (link && link !== current) {
+      // ссылку сайт скачивает к себе — так она не пропадёт и не упрётся в запреты чужого сайта
+      image = /^https?:\/\//i.test(link) ? await importImage(link) : link;
+    } else if (formData.get("removeImage") === "on") {
+      image = null;
     }
   } catch (e) {
     redirect(`${back}?error=${encodeURIComponent(`Картинка: ${(e as Error).message}`)}`);
