@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSettings } from "@/lib/settings";
 import { itemPrice, suggestedCasePrice } from "@/lib/pricing";
-import { rarityColor, RARITIES } from "@/lib/rarity";
+import { rarityColor } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import Notice from "@/components/Notice";
 import { autoFillCase, deleteCase, saveCase, saveChances, tuneCaseRtp } from "../../actions";
@@ -28,13 +28,12 @@ export default async function EditCase({ params, searchParams }: { params: { id:
     prisma.skinCatalog.findMany({
       where: { isDefault: true },
       select: { baseName: true, price: true },
-      orderBy: { baseName: "asc" },
+      orderBy: [{ price: { sort: "desc", nulls: "last" } }, { baseName: "asc" }], // подсказки — от дорогих к дешёвым
     }),
   ]);
 
-  const rows = (kase?.items ?? []).sort(
-    (a, b) => RARITIES.indexOf(a.item.rarity as never) - RARITIES.indexOf(b.item.rarity as never),
-  );
+  // предметы кейса — от самого дорогого к самому дешёвому
+  const rows = (kase?.items ?? []).sort((a, b) => itemPrice(b.item) - itemPrice(a.item));
   const { ev, suggested } = suggestedCasePrice(rows, margin);
   const sum = Math.round(rows.reduce((s, r) => s + r.dropChance, 0) * 100) / 100;
   const inCaseNames = new Set(rows.map((r) => r.item.name));

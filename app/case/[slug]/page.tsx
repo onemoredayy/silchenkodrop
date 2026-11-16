@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { itemPrice } from "@/lib/pricing";
-import { RARITIES } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import ItemCard from "@/components/ItemCard";
 import CaseOpener from "@/components/CaseOpener";
@@ -29,7 +28,7 @@ export default async function CasePage({ params }: { params: { slug: string } })
       price: itemPrice(r.item),
       chance: r.dropChance,
     }))
-    .sort((a, b) => RARITIES.indexOf(b.rarity as never) - RARITIES.indexOf(a.rarity as never) || b.price - a.price);
+    .sort((a, b) => b.price - a.price); // от самого дорогого к самому дешёвому
 
   return (
     <div className="space-y-8 sm:space-y-10">

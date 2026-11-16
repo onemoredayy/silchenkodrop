@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import { rarityColor, rarityLabel } from "@/lib/rarity";
 import ItemCard from "./ItemCard";
 import Pager from "./Pager";
 import SkinImage from "./SkinImage";
-import { lose, unlockAudio, setSoundOn, slowingTicks, soundOn, win } from "@/lib/sfx";
+import { unlockAudio, setSoundOn, soundOn } from "@/lib/sfx";
+import ContractSheet from "./ContractSheet";
 
 type Inv = { id: string; name: string; rarity: string; image: string | null; wear: string | null; price: number };
 type Result = { inventoryId: string; value: number; item: Omit<Inv, "id"> & { id: string } };
@@ -15,7 +16,6 @@ type Result = { inventoryId: string; value: number; item: Omit<Inv, "id"> & { id
 const PER_PAGE = 12;
 const MIN = 3;
 const MAX = 10;
-const REVEAL_MS = 1800;
 
 export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: number }) {
   const router = useRouter();
@@ -23,7 +23,6 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
   const [picked, setPicked] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [rolling, setRolling] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sound, setSound] = useState(true);
@@ -51,11 +50,19 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
     setPicked([...items].sort((a, b) => a.price - b.price).slice(0, MAX).map((i) => i.id));
   }
 
-  async function sign() {
+  const [sheet, setSheet] = useState(false);
+  const pending = useRef<Result | null>(null);
+
+  function openSheet() {
     unlockAudio();
-    setBusy(true);
     setError(null);
     setResult(null);
+    setBusy(true);
+    setSheet(true);
+  }
+
+  // вызывается из листа контракта после подписи
+  async function submit() {
     const res = await fetch("/api/contract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -63,27 +70,28 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setBusy(false);
-      return setError(data.error ?? "Не получилось");
+      setError(data.error ?? "Не получилось");
+      return null;
     }
-    setRolling(true);
-    if (sound) slowingTicks(REVEAL_MS);
-    setTimeout(() => {
-      setRolling(false);
-      if (sound) (data.item.price >= data.value ? win : lose)();
-      setBusy(false);
-      setResult(data);
-      setItems((list) => [
-        { ...data.item, id: data.inventoryId },
-        ...list.filter((i) => !picked.includes(i.id)),
-      ]);
-      setPicked([]);
-      router.refresh();
-    }, REVEAL_MS);
+    pending.current = data;
+    return data as Result;
+  }
+
+  function closeSheet() {
+    setSheet(false);
+    setBusy(false);
+    const data = pending.current;
+    pending.current = null;
+    if (!data) return;
+    setResult(data);
+    setItems((list) => [{ ...data.item, id: data.inventoryId }, ...list.filter((i) => !picked.includes(i.id))]);
+    setPicked([]);
+    router.refresh();
   }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:gap-6">
+      {sheet && <ContractSheet items={chosen} value={value} sound={sound} onSubmit={submit} onClose={closeSheet} />}
       <section className="panel order-2 flex flex-col p-3 sm:p-4 lg:order-none">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <span className="font-medium">Твои скины</span>
@@ -134,7 +142,7 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
                 type="button"
                 onClick={() => it && toggle(it.id)}
                 className={`aspect-square overflow-hidden rounded border ${it ? "border-line bg-raised" : "border-dashed border-line/70"} ${
-                  rolling ? "animate-pulse" : ""
+                  sheet ? "animate-pulse" : ""
                 }`}
                 style={it ? { boxShadow: `inset 0 -2px 0 ${rarityColor(it.rarity)}` } : undefined}
                 title={it ? `${it.name} — убрать` : undefined}
@@ -156,8 +164,8 @@ export default function Contractor({ inventory, ret }: { inventory: Inv[]; ret: 
           </div>
         </div>
 
-        <button onClick={sign} disabled={busy || picked.length < MIN} className="btn-primary h-12 w-full text-base">
-          {rolling ? "Подписываем…" : picked.length < MIN ? `Выбери ещё ${MIN - picked.length}` : "Подписать контракт"}
+        <button onClick={openSheet} disabled={busy || picked.length < MIN} className="btn-primary h-12 w-full text-base">
+          {sheet ? "Подписываем…" : picked.length < MIN ? `Выбери ещё ${MIN - picked.length}` : "Подписать контракт"}
         </button>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-dust">
           <input
