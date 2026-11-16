@@ -14,7 +14,7 @@ export default async function Navbar() {
   const user = await getCurrentUser();
   return (
     <header className="border-b border-line bg-ground">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:gap-6">
         <Link href="/" className="font-display text-lg leading-none text-bone">
           Сильченко<span className="text-stencil">Дроп</span>
         </Link>
@@ -33,7 +33,7 @@ export default async function Navbar() {
         <div className="ml-auto flex items-center gap-3">
           {user ? (
             <>
-              <Link href="/balance" className="rounded border border-line px-3 py-1.5 text-sm hover:border-stencil">
+              <Link href="/balance" className="whitespace-nowrap rounded border border-line px-2.5 py-1.5 text-sm hover:border-stencil sm:px-3">
                 {money(user.balance)}
               </Link>
               <Link href="/profile" className="flex items-center gap-2 text-sm" title="Профиль">
@@ -42,28 +42,27 @@ export default async function Navbar() {
               </Link>
             </>
           ) : (
-            <a href="/api/auth/steam/login" className="btn-primary h-9">
-              Войти через Steam
+            <a href="/api/auth/steam/login" className="btn-primary h-9 px-3 sm:px-4">
+              Войти<span className="hidden sm:inline"> через Steam</span>
             </a>
           )}
         </div>
       </div>
-      {/* мобильная навигация */}
-      <nav className="flex gap-5 overflow-x-auto border-t border-line px-4 py-2 text-sm sm:hidden">
-        {links.map((l) => (
-          <Link key={l.href} href={l.href} className="whitespace-nowrap text-dust">
-            {l.label}
-          </Link>
-        ))}
-        {user && (
-          <Link href="/profile" className="whitespace-nowrap text-dust">
-            Профиль
-          </Link>
-        )}
-        {user?.role === "ADMIN" && (
-          <Link href="/admin" className="whitespace-nowrap text-dust">
-            Админка
-          </Link>
+      {/* мобильная навигация: панель вкладок внизу экрана, под большой палец */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-ground/95 backdrop-blur sm:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {[...links, ...(user ? [{ href: "/profile", label: "Профиль" }] : []), ...(user?.role === "ADMIN" ? [{ href: "/admin", label: "Админка" }] : [])].map(
+          (l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="flex h-14 min-w-0 flex-1 items-center justify-center px-1 text-center text-[13px] leading-tight text-dust active:text-stencil"
+            >
+              <span className="truncate">{l.label}</span>
+            </Link>
+          ),
         )}
       </nav>
     </header>

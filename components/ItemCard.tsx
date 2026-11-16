@@ -30,19 +30,19 @@ export default function ItemCard({ name, rarity, image, price, wear, chance, foo
         selected ? "border-stencil" : onClick ? "border-line hover:border-dust" : "border-line"
       } ${onClick ? "cursor-pointer select-none" : ""}`}
     >
-      <div className="relative aspect-[4/3] bg-raised/50 p-3">
+      <div className="relative aspect-[4/3] bg-raised/50 p-2 sm:p-3">
         <SkinImage src={image} name={name} className="h-full w-full" />
         {chance != null && (
-          <span className="absolute right-2 top-2 text-xs text-dust">{chance.toFixed(chance < 1 ? 2 : 1)}%</span>
+          <span className="absolute right-1.5 top-1.5 text-[11px] text-dust sm:right-2 sm:top-2 sm:text-xs">{chance.toFixed(chance < 1 ? 2 : 1)}%</span>
         )}
       </div>
       <div className="h-[3px]" style={{ background: color }} />
-      <div className="flex flex-1 flex-col gap-0.5 p-3">
+      <div className="flex flex-1 flex-col gap-0.5 p-2 sm:p-3">
         <div className="truncate text-xs text-dust">{weapon}</div>
-        <div className="truncate text-sm font-medium" title={name}>
+        <div className="truncate text-[13px] font-medium sm:text-sm" title={name}>
           {skin ?? weapon}
         </div>
-        <div className="mt-1 flex items-baseline justify-between gap-2 text-sm">
+        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 text-[13px] sm:text-sm">
           {price != null && <span>{money(price)}</span>}
           {wear && <span className="truncate text-xs text-dust">{wearRu(wear)}</span>}
         </div>

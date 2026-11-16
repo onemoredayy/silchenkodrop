@@ -32,9 +32,9 @@ export default async function CasePage({ params }: { params: { slug: string } })
     .sort((a, b) => RARITIES.indexOf(b.rarity as never) - RARITIES.indexOf(a.rarity as never) || b.price - a.price);
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       <section>
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-2 sm:mb-5 sm:gap-3">
           <div>
             <h1 className="h1">{kase.name}</h1>
             {kase.description && <p className="mt-2 max-w-xl text-dust">{kase.description}</p>}
@@ -54,7 +54,7 @@ export default async function CasePage({ params }: { params: { slug: string } })
 
       <section>
         <h2 className="h2 mb-4">Что внутри</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
           {items.map((it) => (
             <ItemCard key={it.id} {...it} />
           ))}

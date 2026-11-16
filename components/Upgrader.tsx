@@ -116,9 +116,9 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
   const C = 2 * Math.PI * R;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_300px_1fr]">
+    <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_300px_1fr]">
       {/* ставка */}
-      <section className="panel flex min-h-[420px] flex-col p-4">
+      <section className="panel order-2 flex flex-col p-3 sm:p-4 lg:order-none lg:min-h-[420px]">
         <div className="mb-3 flex items-baseline justify-between">
           <span className="font-medium">Твои скины</span>
           <span className="text-sm text-dust">
@@ -129,7 +129,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
           <p className="text-sm text-dust">Инвентарь пуст. Открой кейс, и сюда будет что поставить.</p>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
               {invShown.map((i) => (
                 <ItemCard
                   key={i.id}
@@ -149,8 +149,8 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
       </section>
 
       {/* круг */}
-      <section className="flex flex-col items-center justify-center gap-4">
-        <div className="relative h-[220px] w-[220px]">
+      <section className="order-1 flex flex-col items-center justify-center gap-4 lg:order-none">
+        <div className="relative h-[180px] w-[180px] sm:h-[220px] sm:w-[220px]">
           <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
             <circle cx="110" cy="110" r={R} fill="none" stroke="#353b33" strokeWidth="14" />
             <circle
@@ -188,7 +188,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
         </button>
         <div className="flex flex-wrap justify-center gap-1">
           {MULTS.map((m) => (
-            <button key={m} onClick={() => pickMult(m)} disabled={!value || spinning} className="btn-ghost h-8 px-3 text-xs">
+            <button key={m} onClick={() => pickMult(m)} disabled={!value || spinning} className="btn-ghost h-10 px-3 text-sm sm:h-8 sm:text-xs">
               ×{m}
             </button>
           ))}
@@ -198,7 +198,7 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
       </section>
 
       {/* цель */}
-      <section className="panel flex min-h-[420px] flex-col p-4">
+      <section className="panel order-3 flex flex-col p-3 sm:p-4 lg:order-none lg:min-h-[420px]">
         <div className="mb-3 font-medium">Цель</div>
         {target && (
           <div className="mb-3 flex items-center gap-3 rounded border border-stencil p-2" style={{ boxShadow: `inset 3px 0 0 ${rarityColor(target.rarity)}` }}>
@@ -210,14 +210,14 @@ export default function Upgrader({ inventory, edge, maxChance }: { inventory: In
           </div>
         )}
         <div className="mb-2 flex gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск" className="input h-9" />
-          <select value={stOnly} onChange={(e) => setStOnly(e.target.value)} className="input h-9 w-28">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск" className="input h-10 sm:h-9" />
+          <select value={stOnly} onChange={(e) => setStOnly(e.target.value)} className="input h-10 w-28 sm:h-9">
             <option value="">Все</option>
             <option value="0">Без ST</option>
             <option value="1">StatTrak</option>
           </select>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
           {targets.map((t) => (
             <ItemCard
               key={t.marketHashName}

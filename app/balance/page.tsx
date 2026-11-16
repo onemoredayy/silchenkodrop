@@ -30,7 +30,7 @@ export default async function BalancePage() {
             Оплаты пока нет: деньги зачисляются сразу и ненастоящие.
             {depositBonus > 0 && ` Бонус к пополнению +${depositBonus}%.`}
           </p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
             {PRESETS.map((p) => (
               <button key={p} name="amount" value={p} className="btn-ghost h-9 px-0 text-xs">
                 {p.toLocaleString("ru-RU")} ₽

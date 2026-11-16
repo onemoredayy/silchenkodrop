@@ -6,9 +6,33 @@
   color-scheme: dark;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   @apply bg-ground text-bone font-sans antialiased;
   font-feature-settings: "tnum" 1;
+  overflow-x: hidden;
+}
+
+/* кнопки и ссылки срабатывают без задержки двойного тапа */
+a,
+button,
+[role="button"],
+input,
+select,
+label {
+  touch-action: manipulation;
+}
+
+/* полоса прокрутки не нужна у горизонтальных лент на телефоне */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 ::selection {
@@ -35,13 +59,13 @@ body {
     @apply btn border border-danger/60 text-danger hover:bg-danger/10;
   }
   .input {
-    @apply h-10 w-full rounded border border-line bg-ground px-3 text-sm text-bone placeholder:text-dust/60 focus:border-stencil focus:outline-none;
+    @apply h-10 w-full rounded border border-line bg-ground px-3 text-base sm:text-sm text-bone placeholder:text-dust/60 focus:border-stencil focus:outline-none;
   }
   .panel {
     @apply rounded-card border border-line bg-panel;
   }
   .h1 {
-    @apply font-display text-3xl leading-tight sm:text-4xl;
+    @apply font-display text-2xl leading-tight sm:text-4xl;
   }
   .h2 {
     @apply font-display text-xl leading-tight;

@@ -62,8 +62,17 @@ function Reel({
   compact: boolean;
   onFart: () => void;
 }) {
-  const card = compact ? 112 : 148; // ширина карточки в ленте
-  const cardH = compact ? 104 : 148;
+  // ширина карточки в ленте; на телефоне меньше, чтобы было видно соседей
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const card = compact ? (narrow ? 84 : 112) : narrow ? 112 : 148;
+  const cardH = compact ? (narrow ? 76 : 104) : narrow ? 116 : 148;
   const step = card + GAP;
   const viewport = useRef<HTMLDivElement>(null);
   const fart = useRef(onFart);
@@ -136,7 +145,9 @@ function Reel({
               <SkinImage src={it.image} name={it.name} className="h-full w-full" />
             </div>
             <div className="h-[3px]" style={{ background: rarityColor(it.rarity) }} />
-            <div className={`truncate px-2 text-xs text-dust ${compact ? "py-1" : "py-1.5"}`}>{it.name}</div>
+            <div className={`truncate px-1.5 text-dust ${compact ? "py-0.5 text-[10px] sm:py-1 sm:text-xs" : "py-1 text-[11px] sm:py-1.5 sm:text-xs"}`}>
+              {it.name}
+            </div>
           </div>
         ))}
       </div>
@@ -273,7 +284,7 @@ export default function CaseOpener({
       {/* результат: один кейс */}
       {state === "done" && single && (
         <div
-          className="flex flex-wrap items-center gap-4 border-b border-line p-4"
+          className="flex flex-wrap items-center gap-3 border-b border-line p-3 sm:gap-4 sm:p-4"
           style={{ boxShadow: `inset 4px 0 0 ${rarityColor(single.item.rarity)}` }}
         >
           <SkinImage src={single.item.image} name={single.item.name} className="h-20 w-28" />
@@ -304,7 +315,7 @@ export default function CaseOpener({
 
       {/* результат: несколько кейсов */}
       {state === "done" && drops.length > 1 && (
-        <div className="space-y-3 border-b border-line p-4">
+        <div className="space-y-3 border-b border-line p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-dust">
               Выпало {drops.length} шт. на <span className="text-bone">{money(wonTotal)}</span>
@@ -321,7 +332,7 @@ export default function CaseOpener({
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
             {drops.map((d) => {
               const isSold = soldIds.includes(d.inventoryId);
               return (
@@ -353,17 +364,17 @@ export default function CaseOpener({
       )}
 
       {/* управление */}
-      <div className="flex flex-wrap items-center gap-4 p-4">
+      <div className="flex flex-wrap items-center gap-3 p-3 sm:gap-4 sm:p-4">
         {loggedIn ? (
           <>
-            <div className="flex items-center gap-1" role="group" aria-label="Сколько кейсов открыть">
+            <div className="flex w-full items-center gap-1 sm:w-auto" role="group" aria-label="Сколько кейсов открыть">
               {Array.from({ length: MAX_COUNT }, (_, i) => i + 1).map((n) => (
                 <button
                   key={n}
                   onClick={() => pickCount(n)}
                   disabled={busy}
                   aria-pressed={count === n}
-                  className={`h-11 w-10 rounded border text-sm font-semibold disabled:opacity-50 ${
+                  className={`h-11 flex-1 rounded border text-sm font-semibold disabled:opacity-50 sm:w-10 sm:flex-none ${
                     count === n ? "border-stencil bg-stencil text-ground" : "border-line text-dust hover:text-bone"
                   }`}
                 >
@@ -371,14 +382,14 @@ export default function CaseOpener({
                 </button>
               ))}
             </div>
-            <button onClick={open} disabled={!canOpen} className="btn-primary h-11 px-6 text-base">
+            <button onClick={open} disabled={!canOpen} className="btn-primary h-12 w-full px-6 text-base sm:h-11 sm:w-auto">
               {busy
                 ? "Крутится…"
                 : `Открыть ${state === "done" ? "ещё " : ""}${count > 1 ? `${count} шт. ` : ""}за ${money(cost)}`}
             </button>
           </>
         ) : (
-          <a href="/api/auth/steam/login" className="btn-primary h-11 px-6 text-base">
+          <a href="/api/auth/steam/login" className="btn-primary h-12 w-full px-6 text-base sm:h-11 sm:w-auto">
             Войти через Steam, чтобы открыть
           </a>
         )}
@@ -391,7 +402,7 @@ export default function CaseOpener({
           Звук
         </label>
         {loggedIn && (
-          <span className="ml-auto text-sm text-dust">
+          <span className="text-sm text-dust sm:ml-auto">
             На балансе: <span className="text-bone">{money(money_)}</span>
           </span>
         )}

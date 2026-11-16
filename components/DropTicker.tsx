@@ -20,10 +20,10 @@ export default function DropTicker({ drops }: { drops: Drop[] }) {
         {loop.map((d, i) => (
           <div
             key={`${d.id}-${i}`}
-            className="flex w-56 shrink-0 items-center gap-3 border-r border-line px-3 py-2"
+            className="flex w-44 shrink-0 items-center gap-2 border-r border-line px-2 py-2 sm:w-56 sm:gap-3 sm:px-3"
             style={{ boxShadow: `inset 0 -3px 0 ${rarityColor(d.rarity)}` }}
           >
-            <SkinImage src={d.image} name={d.item} className="h-10 w-14 shrink-0" />
+            <SkinImage src={d.image} name={d.item} className="h-9 w-12 shrink-0 sm:h-10 sm:w-14" />
             <div className="min-w-0 text-xs">
               <div className="truncate text-bone">{d.item}</div>
               <div className="truncate text-dust">

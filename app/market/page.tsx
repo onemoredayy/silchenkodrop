@@ -59,8 +59,8 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
         </div>
       </div>
 
-      <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_160px_160px_160px_130px_150px_auto]">
-        <input name="q" defaultValue={q} placeholder="Поиск: Redline, AWP…" className="input" />
+      <form className="grid grid-cols-2 gap-2 lg:grid-cols-[1fr_160px_160px_160px_130px_150px_auto]">
+        <input name="q" defaultValue={q} placeholder="Поиск: Redline, AWP…" className="input col-span-2 lg:col-span-1" />
         <select name="weapon" defaultValue={searchParams.weapon ?? ""} className="input">
           <option value="">Любое оружие</option>
           {weapons.map((w) => (
@@ -105,7 +105,7 @@ export default async function MarketPage({ searchParams }: { searchParams: SP })
             : "Ничего не нашлось. Попробуй другое название."}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-5">
           {rows.map((r) => (
             <ItemCard
               key={r.id}

@@ -57,7 +57,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: { 
           </div>
         </div>
         {!showSold && count > 0 && (
-          <div className="flex items-center gap-4">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:gap-4">
             <span className="text-sm text-dust">
               {count} шт. Комиссия при продаже {sellCommission}%
             </span>
@@ -76,7 +76,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: { 
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
           {rows.map((r) => (
             <ItemCard
               key={r.id}

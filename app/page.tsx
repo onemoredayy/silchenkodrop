@@ -50,22 +50,22 @@ export default async function Home() {
       <section className="space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-display text-4xl leading-none sm:text-6xl">
+            <h1 className="font-display text-[2.4rem] leading-none sm:text-6xl">
               Сильченко<span className="text-stencil">Дроп</span>
             </h1>
             <p className="mt-3 max-w-xl text-dust">
               Кейсы CS2 для своих. Шансы честные и видны на каждом кейсе, выпадение считает сервер.
             </p>
           </div>
-          <div className="text-right text-sm text-dust">
+          <div className="text-sm text-dust sm:text-right">
             Открыто кейсов: <span className="text-bone">{stats._count.toLocaleString("ru-RU")}</span>
           </div>
         </div>
         <DropTicker drops={drops} />
         {blocks.length > 1 && (
-          <nav className="flex flex-wrap gap-2 text-sm">
+          <nav className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 text-sm sm:mx-0 sm:flex-wrap sm:px-0">
             {blocks.map((b) => (
-              <a key={b.id} href={`#${b.slug}`} className="rounded border border-line px-3 py-1.5 text-dust hover:border-stencil hover:text-bone">
+              <a key={b.id} href={`#${b.slug}`} className="shrink-0 whitespace-nowrap rounded border border-line px-3 py-2 text-dust hover:border-stencil hover:text-bone">
                 {b.name}
               </a>
             ))}
@@ -76,12 +76,12 @@ export default async function Home() {
       {blocks.length === 0 && <div className="panel p-6 text-dust">Кейсов пока нет. Добавь их в админке.</div>}
 
       {blocks.map((block) => (
-        <section key={block.id} id={block.slug} className="scroll-mt-6">
+        <section key={block.id} id={block.slug} className="scroll-mt-4">
           <div className="mb-4 flex items-baseline justify-between gap-3 border-b border-line pb-2">
-            <h2 className="font-display text-2xl">{block.name}</h2>
+            <h2 className="font-display text-xl sm:text-2xl">{block.name}</h2>
             <span className="text-sm text-dust">{block.cases.length}</span>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
             {block.cases.map((c) => {
               const present = new Set(c.items.map((r) => r.item.rarity));
               return (
