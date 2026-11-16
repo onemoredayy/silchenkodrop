@@ -9,6 +9,10 @@ import { RARITIES } from "@/lib/rarity";
 import { round2 } from "@/lib/format";
 import { updateAllPrices } from "@/lib/prices";
 import { findDefault } from "@/lib/catalog";
+import { itemPrice } from "@/lib/pricing";
+import { solveChances } from "@/lib/rtp";
+import { EXTRA_CATEGORIES, spread } from "@/lib/junk-cases";
+import { itemForCatalog } from "@/lib/contract";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const num = (f: FormData, k: string) => Number(String(f.get(k) ?? "").replace(",", "."));
@@ -292,4 +296,91 @@ export async function deleteSection(formData: FormData) {
   await prisma.caseSection.delete({ where: { id: str(formData, "id") } });
   revalidatePath("/", "layout");
   redirect("/admin/sections?ok=1");
+}
+
+// ---------- RTP ----------
+
+function rtpInput(formData: FormData, back: string) {
+  const rtp = num(formData, "rtp");
+  const price = num(formData, "price");
+  if (!Number.isFinite(rtp) || rtp <= 0 || rtp > 500) redirect(`${back}?error=${encodeURIComponent("RTP — от 1 до 500%")}`);
+  if (!Number.isFinite(price) || price <= 0) redirect(`${back}?error=${encodeURIComponent("Цена кейса должна быть больше нуля")}`);
+  return { rtp, price: round2(price) };
+}
+
+// Подобрать шансы уже лежащих в кейсе предметов под RTP и цену
+export async function tuneCaseRtp(formData: FormData) {
+  await requireAdmin();
+  const caseId = str(formData, "caseId");
+  const back = `/admin/cases/${caseId}`;
+  const { rtp, price } = rtpInput(formData, back);
+  const rows = await prisma.caseItem.findMany({ where: { caseId }, include: { item: { include: { catalog: true } } } });
+  if (rows.length < 2) redirect(`${back}?error=${encodeURIComponent("Нужно хотя бы 2 предмета. Или нажми «Собрать кейс автоматически».")}`);
+
+  const prices = rows.map((r) => itemPrice(r.item));
+  const target = (price * rtp) / 100;
+  const chances = solveChances(prices, target);
+  if (!chances) {
+    redirect(
+      `${back}?error=${encodeURIComponent(
+        `Не получится: средний дроп должен быть ${round2(target)} ₽, а предметы стоят от ${round2(Math.min(...prices))} до ${round2(Math.max(...prices))} ₽. Добавь дешевле/дороже или поменяй цену.`,
+      )}`,
+    );
+  }
+  await prisma.$transaction([
+    prisma.case.update({ where: { id: caseId }, data: { price } }),
+    ...rows.map((r, i) => prisma.caseItem.update({ where: { id: r.id }, data: { dropChance: chances![i] } })),
+  ]);
+  revalidatePath("/", "layout");
+  redirect(`${back}?ok=1`);
+}
+
+// Собрать кейс с нуля: N скинов из каталога вокруг цены кейса + шансы под RTP
+export async function autoFillCase(formData: FormData) {
+  await requireAdmin();
+  const caseId = str(formData, "caseId");
+  const back = `/admin/cases/${caseId}`;
+  const { rtp, price } = rtpInput(formData, back);
+  const count = Math.min(30, Math.max(3, Math.floor(num(formData, "count")) || 12));
+  const target = (price * rtp) / 100;
+
+  // от «мусора» за ~10% цены кейса до топа в ~20 раз дороже кейса
+  const lo = Math.max(0.5, target * 0.1);
+  const hi = Math.max(target * 20, lo * 4);
+  const pool = await prisma.skinCatalog.findMany({
+    where: {
+      price: { gte: lo, lte: hi },
+      statTrak: false,
+      OR: [{ category: null }, { category: { notIn: EXTRA_CATEGORIES } }],
+    },
+    select: { marketHashName: true, baseName: true, statTrak: true, rarity: true, price: true, image: true, wear: true },
+  });
+  type Cand = { marketHashName: string; baseName: string; statTrak: boolean; rarity: string; price: number; image: string | null; wear: string | null };
+  const priced: Cand[] = pool.filter((p): p is Cand => p.price != null);
+  // перемешиваем, чтобы при каждом нажатии кейс получался другим
+  for (let i = priced.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [priced[i], priced[j]] = [priced[j], priced[i]];
+  }
+  const seen = new Set<string>();
+  const unique = priced.filter((p) => !seen.has(p.baseName) && seen.add(p.baseName)); // один скин — один раз
+  const picked = spread(unique, count);
+  const chances = solveChances(picked.map((p) => p.price), target);
+  if (picked.length < 3 || !chances) {
+    redirect(`${back}?error=${encodeURIComponent("В каталоге не нашлось подходящих скинов с ценами. Обнови цены в сводке.")}`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const items = [];
+    for (const p of picked) items.push(await itemForCatalog(tx, p));
+    await tx.caseItem.deleteMany({ where: { caseId } });
+    await tx.caseItem.createMany({ data: items.map((it, i) => ({ caseId, itemId: it.id, dropChance: chances![i] })) });
+    const kase = await tx.case.findUnique({ where: { id: caseId } });
+    await tx.case.update({
+      where: { id: caseId },
+      data: { price, ...(kase?.image ? {} : { image: picked[picked.length - 1].image }) },
+    });
+  });
+  revalidatePath("/", "layout");
+  redirect(`${back}?ok=1`);
 }

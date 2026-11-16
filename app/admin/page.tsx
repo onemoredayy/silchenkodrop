@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ago, money } from "@/lib/format";
 import Notice from "@/components/Notice";
 import { updatePricesNow } from "./actions";
+import { onlineStats, shownOnline } from "@/lib/online";
+import Avatar from "@/components/Avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,10 @@ export default async function AdminHome({ searchParams }: { searchParams: { msg?
     prisma.case.findMany({ include: { items: true } }),
   ]);
   const pricesAt = await prisma.siteSetting.findUnique({ where: { key: "pricesUpdatedAt" } });
+  const online = onlineStats();
+  const onlineUsers = online.userIds.length
+    ? await prisma.user.findMany({ where: { id: { in: online.userIds } }, select: { id: true, username: true, avatar: true } })
+    : [];
   const badCases = broken.filter((c) => Math.abs(c.items.reduce((s, r) => s + r.dropChance, 0) - 100) > 0.01);
 
   const profit = (openings._sum.pricePaid ?? 0) - (openings._sum.itemPrice ?? 0);
@@ -39,6 +45,25 @@ export default async function AdminHome({ searchParams }: { searchParams: { msg?
       <h1 className="h1">Сводка</h1>
       {searchParams.msg && <p className="rounded border border-ok/50 px-3 py-2 text-sm text-ok">{searchParams.msg}</p>}
       <Notice error={searchParams.error} />
+      <section className="panel space-y-3 p-4">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <span className="font-display text-2xl text-ok">{online.total} онлайн</span>
+          <span className="text-sm text-dust">
+            вошли через Steam: {onlineUsers.length}, гостей: {online.guests}. Игроки видят на сайте {shownOnline()}.
+          </span>
+        </div>
+        {onlineUsers.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {onlineUsers.map((u) => (
+              <Link key={u.id} href={`/u/${u.id}`} className="flex items-center gap-2 rounded border border-line px-2 py-1 text-sm hover:border-stencil">
+                <Avatar src={u.avatar} name={u.username} size={20} />
+                {u.username}
+              </Link>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-dust">Точные данные за последние 2 минуты. Обнови страницу, чтобы пересчитать.</p>
+      </section>
       <form action={updatePricesNow} className="panel flex flex-wrap items-center gap-3 p-4 text-sm">
         <span className="flex-1 text-dust">
           Цены Steam обновляются сами каждые 6 часов.{" "}
@@ -77,7 +102,7 @@ export default async function AdminHome({ searchParams }: { searchParams: { msg?
             <tbody>
               {recent.map((o) => (
                 <tr key={o.id}>
-                  <td>{o.user.username}</td>
+                  <td><Link href={`/u/${o.user.id}`} className="hover:text-stencil">{o.user.username}</Link></td>
                   <td>{o.case.name}</td>
                   <td>{o.item.name}</td>
                   <td className="text-right">{money(o.pricePaid)}</td>

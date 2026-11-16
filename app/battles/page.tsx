@@ -21,13 +21,13 @@ export default async function BattlesPage() {
       where: { status: "OPEN" },
       orderBy: { createdAt: "desc" },
       take: 30,
-      include: { players: { orderBy: { slot: "asc" }, include: { user: { select: { username: true, avatar: true } } } } },
+      include: { players: { orderBy: { slot: "asc" }, include: { user: { select: { id: true, username: true, avatar: true } } } } },
     }),
     prisma.battle.findMany({
       where: { status: "DONE" },
       orderBy: { finishedAt: "desc" },
       take: 10,
-      include: { winner: { select: { username: true, avatar: true } }, players: { select: { total: true } } },
+      include: { winner: { select: { id: true, username: true, avatar: true } }, players: { select: { total: true } } },
     }),
   ]);
   const caseImg = new Map(cases.map((c) => [c.id, c]));

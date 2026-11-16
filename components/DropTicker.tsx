@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { rarityColor } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import SkinImage from "./SkinImage";
 
-type Drop = { id: string; user: string; item: string; rarity: string; image: string | null; price: number };
+type Drop = { id: string; user: string; userId: string; item: string; rarity: string; image: string | null; price: number };
 
 // Живая лента последних выпадений (реальные данные из базы)
 export default function DropTicker({ drops }: { drops: Drop[] }) {
@@ -18,9 +19,11 @@ export default function DropTicker({ drops }: { drops: Drop[] }) {
     <div className="overflow-hidden rounded-card border border-line bg-panel" aria-label="Последние дропы">
       <div className={`flex w-max ${drops.length < 6 ? "" : "ticker"}`}>
         {loop.map((d, i) => (
-          <div
+          <Link
             key={`${d.id}-${i}`}
-            className="flex w-44 shrink-0 items-center gap-2 border-r border-line px-2 py-2 sm:w-56 sm:gap-3 sm:px-3"
+            href={`/u/${d.userId}`}
+            title={`Профиль ${d.user}`}
+            className="flex w-44 hover:bg-raised/60 shrink-0 items-center gap-2 border-r border-line px-2 py-2 sm:w-56 sm:gap-3 sm:px-3"
             style={{ boxShadow: `inset 0 -3px 0 ${rarityColor(d.rarity)}` }}
           >
             <SkinImage src={d.image} name={d.item} className="h-9 w-12 shrink-0 sm:h-10 sm:w-14" />
@@ -30,7 +33,7 @@ export default function DropTicker({ drops }: { drops: Drop[] }) {
                 {d.user}, {money(d.price)}
               </div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { money } from "@/lib/format";
 import Avatar from "./Avatar";
+import OnlineBadge from "./OnlineBadge";
+import { shownOnline } from "@/lib/online";
 
 const links = [
   { href: "/", label: "Кейсы" },
@@ -39,6 +41,7 @@ export default async function Navbar() {
           )}
         </nav>
         <div className="ml-auto flex items-center gap-3">
+          <OnlineBadge initial={shownOnline()} />
           {user ? (
             <>
               <Link href="/balance" className="whitespace-nowrap rounded border border-line px-2.5 py-1.5 text-sm hover:border-stencil sm:px-3">

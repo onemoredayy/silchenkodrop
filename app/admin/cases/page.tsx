@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSettings } from "@/lib/settings";
 import { suggestedCasePrice } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import { caseRtp } from "@/lib/rtp";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function AdminCases() {
       <div className="panel overflow-x-auto px-4">
         <table className="table">
           <thead>
-            <tr><th>Название</th><th className="text-right">Цена</th><th className="text-right">Средний дроп</th><th className="text-right">Шансы</th><th className="text-right">Открытий</th><th>Статус</th></tr>
+            <tr><th>Название</th><th className="text-right">Цена</th><th className="text-right">Средний дроп</th><th className="text-right">RTP</th><th className="text-right">Шансы</th><th className="text-right">Открытий</th><th>Статус</th></tr>
           </thead>
           <tbody>
             {cases.map((c) => {
@@ -34,6 +35,7 @@ export default async function AdminCases() {
                   <td><Link href={`/admin/cases/${c.id}`} className="hover:text-stencil">{c.name}</Link></td>
                   <td className="text-right">{money(c.price)}</td>
                   <td className={`text-right ${ev > c.price ? "text-danger" : "text-dust"}`} title="Средняя цена выпадающего предмета">{money(ev)}</td>
+                  <td className={`text-right ${caseRtp(ev, c.price) > 100 ? "text-danger" : ""}`}>{c.items.length ? `${caseRtp(ev, c.price)}%` : "—"}</td>
                   <td className={`text-right ${Math.abs(sum - 100) > 0.01 ? "text-danger" : "text-dust"}`}>{sum}%</td>
                   <td className="text-right">{c._count.openings}</td>
                   <td className={c.isActive ? "text-ok" : "text-dust"}>{c.isActive ? "Включён" : "Выключен"}</td>
@@ -43,7 +45,7 @@ export default async function AdminCases() {
           </tbody>
         </table>
       </div>
-      <p className="text-sm text-dust">Красный «средний дроп» значит, что кейс в среднем отдаёт больше, чем стоит.</p>
+      <p className="text-sm text-dust">RTP — сколько процентов от цены кейс в среднем возвращает дропом. Больше 100% — кейс в минус сайту. Подобрать RTP можно в карточке кейса.</p>
     </div>
   );
 }

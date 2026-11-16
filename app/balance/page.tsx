@@ -1,20 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { getSettings } from "@/lib/settings";
 import { dateTime, money } from "@/lib/format";
 import { TX_LABEL, txDetails } from "@/lib/tx";
-import { mockDeposit } from "./actions";
+import { activatePromo } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const PRESETS = [100, 500, 1000, 5000];
-
-export default async function BalancePage() {
+export default async function BalancePage({ searchParams }: { searchParams: { msg?: string; error?: string } }) {
   const user = await requireUser();
-  const [{ depositBonus }, txs] = await Promise.all([
-    getSettings(),
-    prisma.transaction.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 100 }),
-  ]);
+  const txs = await prisma.transaction.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 100 });
 
   return (
     <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
@@ -24,22 +18,22 @@ export default async function BalancePage() {
           <div className="text-sm text-dust">Сейчас на счёте</div>
           <div className="font-display text-4xl">{money(user.balance)}</div>
         </div>
-        <form action={mockDeposit} className="panel space-y-3 p-5">
+        <div className="panel space-y-2 p-5">
           <div className="font-medium">Пополнить</div>
-          <p className="text-sm text-dust">
-            Оплаты пока нет: деньги зачисляются сразу и ненастоящие.
-            {depositBonus > 0 && ` Бонус к пополнению +${depositBonus}%.`}
-          </p>
-          <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
-            {PRESETS.map((p) => (
-              <button key={p} name="amount" value={p} className="btn-ghost h-9 px-0 text-xs">
-                {p.toLocaleString("ru-RU")} ₽
-              </button>
-            ))}
-          </div>
+          <p className="text-sm text-dust">Пополнение скоро появится. Пока баланс можно получить промокодом или у администратора.</p>
+          {user.depositBonus > 0 && (
+            <p className="text-sm text-ok">
+              Активен бонус +{user.depositBonus}% к следующему пополнению (промокод {user.depositPromo}).
+            </p>
+          )}
+        </div>
+        <form action={activatePromo} className="panel space-y-3 p-5">
+          <div className="font-medium">Промокод</div>
+          {searchParams.msg && <p className="text-sm text-ok">{searchParams.msg}</p>}
+          {searchParams.error && <p className="text-sm text-danger">{searchParams.error}</p>}
           <div className="flex gap-2">
-            <input name="amount" type="number" min={10} max={100000} placeholder="Своя сумма" className="input" />
-            <button className="btn-primary">Пополнить</button>
+            <input name="code" placeholder="Введи промокод" autoComplete="off" autoCapitalize="characters" className="input uppercase" />
+            <button className="btn-primary shrink-0">Активировать</button>
           </div>
         </form>
       </section>

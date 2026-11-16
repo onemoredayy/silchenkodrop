@@ -39,6 +39,7 @@ export default async function Home() {
   const drops = recent.map((o) => ({
     id: o.id,
     user: o.user.username,
+    userId: o.user.id,
     item: o.item.name,
     rarity: o.item.rarity,
     image: o.item.image,

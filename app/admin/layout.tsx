@@ -7,6 +7,7 @@ const NAV = [
   { href: "/admin/cases", label: "Кейсы" },
   { href: "/admin/items", label: "Предметы" },
   { href: "/admin/users", label: "Игроки" },
+  { href: "/admin/promos", label: "Промокоды" },
   { href: "/admin/settings", label: "Настройки" },
 ];
 

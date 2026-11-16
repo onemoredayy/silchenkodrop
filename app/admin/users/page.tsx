@@ -27,7 +27,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: { q?:
             <Avatar src={u.avatar} name={u.username} size={40} />
             <div className="min-w-[10rem] flex-1">
               <div className="font-medium">
-                {u.username}
+                <a href={`/u/${u.id}`} className="hover:text-stencil">{u.username}</a>
                 {u.role === "ADMIN" && <span className="ml-2 text-xs text-stencil">админ</span>}
                 {u.isBanned && <span className="ml-2 text-xs text-danger">заблокирован</span>}
               </div>

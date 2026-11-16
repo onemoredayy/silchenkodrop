@@ -27,6 +27,10 @@ model User {
   battleDrops  BattleDrop[]
   battlesWon   Battle[]        @relation("BattleWinner")
   battlesMade  Battle[]        @relation("BattleCreator")
+  promoUses    PromoUse[]
+  // бонус к следующему пополнению от промокода, %
+  depositBonus Float           @default(0)
+  depositPromo String?
 }
 
 // Блоки кейсов на главной: «СИЛЬЧЕНКО», «Обычные кейсы» и т.д.
@@ -187,6 +191,31 @@ model BattleDrop {
   battle   Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+}
+
+// Промокод. kind: BALANCE — сразу +value ₽ на баланс; DEPOSIT — +value% к следующему пополнению
+model Promo {
+  id        String     @id @default(cuid())
+  code      String     @unique // хранится в верхнем регистре
+  kind      String
+  value     Float
+  maxUses   Int        @default(0) // 0 — без ограничения
+  uses      Int        @default(0)
+  isActive  Boolean    @default(true)
+  expiresAt DateTime?
+  createdAt DateTime   @default(now())
+  usages    PromoUse[]
+}
+
+model PromoUse {
+  id        String   @id @default(cuid())
+  promoId   String
+  userId    String
+  createdAt DateTime @default(now())
+  promo     Promo    @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([promoId, userId])
 }
 
 // type: DEPOSIT | OPEN | SELL | ADMIN | BATTLE | BATTLE_REFUND

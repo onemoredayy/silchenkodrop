@@ -119,7 +119,7 @@ export default function BattleRoom({ initial, me }: { initial: BattleView; me: {
         )}
         {finished && (
           <span className="text-sm">
-            <span className="text-stencil">{b.players.find((p) => p.userId === b.winnerId)?.username}</span> забирает всё:{" "}
+            <a href={`/u/${b.winnerId}`} className="text-stencil hover:underline">{b.players.find((p) => p.userId === b.winnerId)?.username}</a> забирает всё:{" "}
             {b.drops.length} скинов на {money(totalPot)}
             {me && b.winnerId === me.id && <span className="text-ok"> — это ты! Скины уже в инвентаре.</span>}
           </span>
@@ -167,8 +167,10 @@ export default function BattleRoom({ initial, me }: { initial: BattleView; me: {
           return (
             <div key={i} className={`panel flex min-w-0 flex-col overflow-hidden ${isWinner ? "border-stencil" : ""} ${lost ? "opacity-60" : ""}`}>
               <div className="flex items-center gap-2 border-b border-line p-2 sm:p-3">
-                <Avatar src={p.avatar} name={p.username} size={28} />
-                <span className="min-w-0 flex-1 truncate text-sm">{p.username}</span>
+                <a href={`/u/${p.userId}`} className="flex min-w-0 flex-1 items-center gap-2 hover:text-stencil" title="Профиль">
+                  <Avatar src={p.avatar} name={p.username} size={28} />
+                  <span className="min-w-0 flex-1 truncate text-sm">{p.username}</span>
+                </a>
               </div>
               <div className="border-b border-line px-2 py-1.5 text-center font-display text-lg sm:text-xl">
                 {money(playerTotal(p.userId))}

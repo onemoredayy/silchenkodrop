@@ -5,7 +5,8 @@ import { itemPrice, suggestedCasePrice } from "@/lib/pricing";
 import { rarityColor, RARITIES } from "@/lib/rarity";
 import { money } from "@/lib/format";
 import Notice from "@/components/Notice";
-import { deleteCase, saveCase, saveChances } from "../../actions";
+import { autoFillCase, deleteCase, saveCase, saveChances, tuneCaseRtp } from "../../actions";
+import { caseRtp } from "@/lib/rtp";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export default async function EditCase({ params, searchParams }: { params: { id:
   const { ev, suggested } = suggestedCasePrice(rows, margin);
   const sum = Math.round(rows.reduce((s, r) => s + r.dropChance, 0) * 100) / 100;
   const inCaseNames = new Set(rows.map((r) => r.item.name));
+  const rtp = kase ? caseRtp(ev, kase.price) : 0;
+  const prices = rows.map((r) => itemPrice(r.item));
 
   return (
     <div className="space-y-8">
@@ -91,6 +94,71 @@ export default async function EditCase({ params, searchParams }: { params: { id:
           <button className="btn-primary">{isNew ? "Создать кейс" : "Сохранить"}</button>
         </div>
       </form>
+
+      {kase && (
+        <section className="panel space-y-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <h2 className="h2">RTP</h2>
+            <div className="font-display text-3xl" style={{ color: rtp > 100 ? "#e0614a" : rtp >= 80 ? "#8fbf6a" : "#e0b43a" }}>
+              {rows.length ? `${rtp}%` : "—"}
+            </div>
+            <div className="text-sm text-dust">
+              Средний дроп {money(ev)} при цене {money(kase.price)}.{" "}
+              {rtp > 100 ? "Кейс в минус сайту." : rtp ? `Сайт в среднем оставляет ${money(kase.price - ev)} с открытия.` : ""}
+            </div>
+          </div>
+          {/* полоска: 0–150% */}
+          <div className="relative h-2 rounded bg-raised">
+            <div className="absolute inset-y-0 left-0 rounded" style={{ width: `${Math.min(100, (rtp / 150) * 100)}%`, background: rtp > 100 ? "#e0614a" : "#e0b43a" }} />
+            <div className="absolute inset-y-[-3px] w-px bg-bone" style={{ left: `${(100 / 150) * 100}%` }} title="100%" />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <form action={tuneCaseRtp} className="space-y-2 rounded border border-line p-3">
+              <input type="hidden" name="caseId" value={kase.id} />
+              <div className="font-medium">Подобрать шансы</div>
+              <p className="text-xs text-dust">Предметы остаются те же, меняются только шансы (дорогие — реже) и цена кейса.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-dust">RTP, %</span>
+                  <input name="rtp" type="number" step="0.1" min="1" max="500" defaultValue={rtp && rtp < 500 ? Math.round(rtp) : 85} className="input" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-dust">Цена кейса, ₽</span>
+                  <input name="price" type="number" step="0.01" min="0.01" defaultValue={kase.price} className="input" />
+                </label>
+              </div>
+              {prices.length > 1 && (
+                <p className="text-xs text-dust">
+                  Возможный средний дроп: от {money(Math.min(...prices))} до {money(Math.max(...prices))}.
+                </p>
+              )}
+              <button className="btn-primary w-full" disabled={rows.length < 2}>Подобрать шансы</button>
+            </form>
+
+            <form action={autoFillCase} className="space-y-2 rounded border border-line p-3">
+              <input type="hidden" name="caseId" value={kase.id} />
+              <div className="font-medium">Собрать кейс автоматически</div>
+              <p className="text-xs text-dust">Сайт сам возьмёт скины из каталога (от дешёвых до топа) и выставит шансы. Текущие предметы заменятся.</p>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-dust">RTP, %</span>
+                  <input name="rtp" type="number" step="0.1" min="1" max="500" defaultValue={85} className="input" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-dust">Цена, ₽</span>
+                  <input name="price" type="number" step="0.01" min="0.01" defaultValue={kase.price} className="input" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-dust">Предметов</span>
+                  <input name="count" type="number" min="3" max="30" defaultValue={12} className="input" />
+                </label>
+              </div>
+              <button className="btn-ghost w-full">Собрать (можно жать ещё раз)</button>
+            </form>
+          </div>
+        </section>
+      )}
 
       {kase && (
         <form action={saveChances} className="space-y-3">

@@ -62,6 +62,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: { ta
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <a href="#inventory" className="text-stencil hover:underline">Инвентарь</a>
+            <Link href={`/u/${user.id}`} className="text-dust hover:text-bone">Как меня видят другие</Link>
             <Link href="/balance" className="text-dust hover:text-bone">Баланс</Link>
             <Link href="/market" className="text-dust hover:text-bone">Каталог скинов</Link>
             {user.role === "ADMIN" && <Link href="/admin" className="text-dust hover:text-bone">Админка</Link>}
