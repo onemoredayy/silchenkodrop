@@ -13,6 +13,7 @@ import { itemPrice } from "@/lib/pricing";
 import { solveChances } from "@/lib/rtp";
 import { EXTRA_CATEGORIES, spread } from "@/lib/junk-cases";
 import { itemForCatalog } from "@/lib/contract";
+import { saveImage } from "@/lib/uploads";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const num = (f: FormData, k: string) => Number(String(f.get(k) ?? "").replace(",", "."));
@@ -47,11 +48,25 @@ export async function saveCase(formData: FormData) {
   const clash = await prisma.case.findFirst({ where: { slug, NOT: id ? { id } : undefined } });
   if (clash) redirect(`${back}?error=${encodeURIComponent(`Адрес «${slug}» уже занят`)}`);
 
+  // Картинка: новый файл > «убрать» > оставить как было. Файл хранится в базе сайта.
+  const current = id ? (await prisma.case.findUnique({ where: { id }, select: { image: true } }))?.image ?? null : null;
+  let image: string | null = current;
+  const file = formData.get("imageFile");
+  try {
+    if (file && typeof file === "object" && "arrayBuffer" in file && (file as Blob).size > 0) {
+      image = await saveImage(Buffer.from(await (file as Blob).arrayBuffer()));
+    } else if (formData.get("removeImage") === "on") {
+      image = null;
+    }
+  } catch (e) {
+    redirect(`${back}?error=${encodeURIComponent(`Картинка: ${(e as Error).message}`)}`);
+  }
+
   const data = {
     name,
     slug,
     price: round2(price),
-    image: str(formData, "image") || null,
+    image,
     description: str(formData, "description") || null,
     isActive: formData.get("isActive") === "on",
     sortOrder: Number(str(formData, "sortOrder")) || 0,

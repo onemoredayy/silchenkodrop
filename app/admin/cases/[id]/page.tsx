@@ -78,10 +78,29 @@ export default async function EditCase({ params, searchParams }: { params: { id:
           <span className="text-sm text-dust">Порядок внутри блока</span>
           <input name="sortOrder" type="number" defaultValue={kase?.sortOrder ?? 0} className="input" />
         </label>
-        <label className="space-y-1">
-          <span className="text-sm text-dust">Картинка (ссылка; пусто — покажется название)</span>
-          <input name="image" defaultValue={kase?.image ?? ""} className="input" />
-        </label>
+        <div className="space-y-2 sm:col-span-2">
+          <span className="text-sm text-dust">Картинка кейса</span>
+          <div className="flex flex-wrap items-center gap-3">
+            {kase?.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={kase.image} alt="" className="h-20 w-24 rounded border border-line bg-raised object-contain p-1" />
+            )}
+            <input
+              type="file"
+              name="imageFile"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+              className="max-w-full text-sm text-dust file:mr-3 file:h-10 file:cursor-pointer file:rounded file:border file:border-line file:bg-transparent file:px-4 file:text-sm file:font-semibold file:text-bone"
+            />
+          </div>
+          {kase?.image && (
+            <label className="flex items-center gap-2 text-sm text-dust">
+              <input type="checkbox" name="removeImage" className="accent-danger" /> Убрать картинку
+            </label>
+          )}
+          <span className="block text-xs text-dust">
+            Выбери файл с телефона или компа (PNG, JPG, WEBP, GIF, до 8 МБ). Лучше PNG с прозрачным фоном. Если ничего не выбирать, останется текущая картинка.
+          </span>
+        </div>
         <label className="space-y-1 sm:col-span-2">
           <span className="text-sm text-dust">Описание</span>
           <textarea name="description" defaultValue={kase?.description ?? ""} rows={2} className="input h-auto py-2" />
